@@ -476,7 +476,7 @@ export default function RoomDetail() {
   return (
     <div className="max-w-7xl mx-auto pb-10">
       {/* Header */}
-      <div className="flex flex-col 2xl:flex-row items-start 2xl:items-center justify-between gap-4 mb-8">
+      <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 mb-8">
         <div className="flex items-center gap-4">
           <button 
             onClick={() => { playClick(); navigate('/'); }} 
@@ -532,12 +532,12 @@ export default function RoomDetail() {
       )}
 
       {(room.status === 'Ocupada' || room.status === 'Libre') && (
-        <div className="grid grid-cols-1 2xl:grid-cols-3 gap-8">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Left Column: Controls */}
-          <div className="2xl:col-span-2 space-y-6">
+          <div className="lg:col-span-2 space-y-6">
             {/* Timer Section */}
             <div className={cn(
-              "p-8 rounded-3xl shadow-xl flex flex-col 2xl:flex-row items-center justify-between gap-6 transition-all",
+              "p-8 rounded-3xl shadow-xl flex flex-col lg:flex-row items-center justify-between gap-6 transition-all",
               isWarning ? "bg-red-600 text-white animate-pulse" : "bg-white border border-slate-200"
             )}>
               <div className="flex items-center gap-6">
@@ -559,7 +559,7 @@ export default function RoomDetail() {
               {room.status === 'Libre' ? (
                 <button 
                   onClick={handleStartService}
-                  className="w-full 2xl:w-auto px-10 py-5 rounded-2xl font-black text-xl flex items-center justify-center gap-3 bg-blue-600 text-white hover:bg-blue-700 shadow-lg shadow-blue-200 transition-all active:scale-95"
+                  className="w-full lg:w-auto px-10 py-5 rounded-2xl font-black text-xl flex items-center justify-center gap-3 bg-blue-600 text-white hover:bg-blue-700 shadow-lg shadow-blue-200 transition-all active:scale-95"
                 >
                   <Clock size={28} /> Iniciar Tiempo
                 </button>
@@ -567,7 +567,7 @@ export default function RoomDetail() {
                 <button 
                   onClick={handleAddExtraHour}
                   className={cn(
-                    "w-full 2xl:w-auto px-10 py-5 rounded-2xl font-black text-xl flex items-center justify-center gap-3 shadow-lg transition-all active:scale-95",
+                    "w-full lg:w-auto px-10 py-5 rounded-2xl font-black text-xl flex items-center justify-center gap-3 shadow-lg transition-all active:scale-95",
                     isWarning ? "bg-white text-red-600 hover:bg-red-50" : "bg-blue-600 text-white hover:bg-blue-700 shadow-blue-200"
                   )}
                 >
@@ -581,7 +581,7 @@ export default function RoomDetail() {
               <h3 className="text-xl font-black mb-6 flex items-center gap-2 text-slate-800 uppercase tracking-tight">
                 <Users size={24} className="text-blue-600"/> Servicios Extra
               </h3>
-              <div className="grid grid-cols-2 sm:grid-cols-3 2xl:grid-cols-4 gap-4">
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
                 <button onClick={handleAddPerson} className="p-4 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded-2xl font-bold flex flex-col items-center gap-2 transition-all active:scale-95 border border-blue-100">
                   <Plus size={24} /> 
                   <span className="text-sm">Persona</span>
@@ -611,7 +611,7 @@ export default function RoomDetail() {
                 <h3 className="text-xl font-black mb-6 flex items-center gap-2 text-slate-800 uppercase tracking-tight">
                   <Wine size={24} className="text-red-600"/> Bebidas
                 </h3>
-                <div className="grid grid-cols-2 sm:grid-cols-3 2xl:grid-cols-4 gap-4">
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
                   {bebidas.map((prod, idx) => (
                     <button 
                       key={prod.id}
@@ -640,7 +640,7 @@ export default function RoomDetail() {
                 <h3 className="text-xl font-black mb-6 flex items-center gap-2 text-slate-800 uppercase tracking-tight">
                   <Heart size={24} className="text-pink-600"/> Sex Shop
                 </h3>
-                <div className="grid grid-cols-2 sm:grid-cols-3 2xl:grid-cols-4 gap-4">
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
                   {sexshop.map((prod, idx) => (
                     <button 
                       key={prod.id}

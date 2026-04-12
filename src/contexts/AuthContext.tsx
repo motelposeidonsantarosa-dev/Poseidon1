@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { collection, doc, getDocs, setDoc, getDoc, updateDoc, query, where } from 'firebase/firestore';
+import { collection, doc, getDocs, setDoc, getDoc, updateDoc, query, where, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase';
 
 export interface AppUser {
@@ -8,6 +8,7 @@ export interface AppUser {
   role: 'admin' | 'host';
   pin: string;
   active: boolean;
+  lastSessionId?: string;
 }
 
 interface AuthContextType {
@@ -35,23 +36,51 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let unsubscribeUser: (() => void) | null = null;
+
     const initAuth = async () => {
       try {
-        // 1. Check local storage for session first (Fastest path)
         const savedUserId = localStorage.getItem('poseidon_user_id');
-        if (savedUserId) {
-          const userDoc = await getDoc(doc(db, 'app_users', savedUserId));
+        const savedSessionId = localStorage.getItem('poseidon_session_id');
+
+        if (savedUserId && savedSessionId) {
+          const userRef = doc(db, 'app_users', savedUserId);
+          const userDoc = await getDoc(userRef);
+          
           if (userDoc.exists()) {
             const userData = userDoc.data() as AppUser;
-            setAppUser(userData);
-            // If we found the user, we can stop the initial loading block
-            setLoading(false);
+            
+            // Check if session is still valid
+            if (userData.lastSessionId === savedSessionId) {
+              setAppUser(userData);
+              
+              // Listen for session changes (Single Session Restriction)
+              unsubscribeUser = onSnapshot(userRef, (doc) => {
+                if (doc.exists()) {
+                  const data = doc.data() as AppUser;
+                  const currentSavedSessionId = localStorage.getItem('poseidon_session_id');
+                  
+                  // Only trigger if we have a session ID locally and it differs from Firestore
+                  // and Firestore's ID is NOT null (which would mean an intentional logout)
+                  if (currentSavedSessionId && data.lastSessionId && data.lastSessionId !== currentSavedSessionId) {
+                    // Session invalidated by another login
+                    setAppUser(null);
+                    localStorage.removeItem('poseidon_user_id');
+                    localStorage.removeItem('poseidon_session_id');
+                    alert('Tu sesión ha sido cerrada porque se inició sesión en otro dispositivo.');
+                  }
+                }
+              });
+            } else {
+              localStorage.removeItem('poseidon_user_id');
+              localStorage.removeItem('poseidon_session_id');
+            }
           } else {
             localStorage.removeItem('poseidon_user_id');
+            localStorage.removeItem('poseidon_session_id');
           }
         }
 
-        // 2. Fetch all users (needed for login screen or management)
         const usersSnap = await getDocs(collection(db, 'app_users'));
         if (usersSnap.empty) {
           // Bootstrap users only if collection is totally empty
@@ -68,13 +97,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setLoading(false);
     };
     initAuth();
+    return () => {
+      if (unsubscribeUser) unsubscribeUser();
+    };
   }, []);
 
   const login = async (id: string, pin: string) => {
-    const userDoc = await getDoc(doc(db, 'app_users', id));
+    const userRef = doc(db, 'app_users', id);
+    const userDoc = await getDoc(userRef);
     if (userDoc.exists()) {
       const userData = userDoc.data() as AppUser;
       if (userData.pin === pin && userData.active) {
+        // Generate new session ID
+        const newSessionId = Math.random().toString(36).substring(2) + Date.now().toString(36);
+        
         if (userData.role === 'host') {
           const q = query(collection(db, 'shifts'), where('status', '==', 'active'));
           const activeShiftsSnap = await getDocs(q);
@@ -85,8 +121,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             }
           }
         }
-        setAppUser(userData);
+
+        // Update session ID in Firestore
+        await updateDoc(userRef, { lastSessionId: newSessionId });
+        
+        setAppUser({ ...userData, lastSessionId: newSessionId });
         localStorage.setItem('poseidon_user_id', id);
+        localStorage.setItem('poseidon_session_id', newSessionId);
         return;
       }
     }
@@ -101,8 +142,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         throw new Error('Debes terminar tu turno antes de cerrar sesión.');
       }
     }
+    
+    // Clear session in Firestore if desired, or just local
+    if (appUser) {
+      await updateDoc(doc(db, 'app_users', appUser.id), { lastSessionId: null });
+    }
+
     setAppUser(null);
     localStorage.removeItem('poseidon_user_id');
+    localStorage.removeItem('poseidon_session_id');
   };
 
   const updatePin = async (id: string, newPin: string) => {

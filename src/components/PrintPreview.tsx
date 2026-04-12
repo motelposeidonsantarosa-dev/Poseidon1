@@ -1,9 +1,13 @@
-import React, { useState, useEffect } from 'react';
-import { X, Printer, Download } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { X, Printer, Share2 } from 'lucide-react';
+import html2canvas from 'html2canvas';
+import { jsPDF } from 'jspdf';
 
 export const PrintPreview = () => {
   const [html, setHtml] = useState<string | null>(null);
   const [isOpen, setIsOpen] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const previewRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const handlePrintEvent = (e: any) => {
@@ -17,33 +21,114 @@ export const PrintPreview = () => {
 
   if (!isOpen || !html) return null;
 
-  const handlePrint = () => {
-    const iframe = document.createElement('iframe');
-    iframe.style.position = 'fixed';
-    iframe.style.right = '0';
-    iframe.style.bottom = '0';
-    iframe.style.width = '0';
-    iframe.style.height = '0';
-    iframe.style.border = '0';
-    document.body.appendChild(iframe);
+  const generatePDF = async (): Promise<Blob | null> => {
+    if (!previewRef.current) return null;
+    
+    try {
+      setIsProcessing(true);
+      const canvas = await html2canvas(previewRef.current, {
+        scale: 2,
+        useCORS: true,
+        logging: false,
+        backgroundColor: '#ffffff'
+      });
+      
+      const imgData = canvas.toDataURL('image/png');
+      const pdfWidth = 80; // 80mm thermal paper
+      const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+      
+      const pdf = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: [pdfWidth, pdfHeight]
+      });
+      
+      pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+      return pdf.output('blob');
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+      return null;
+    } finally {
+      setIsProcessing(false);
+    }
+  };
 
-    const doc = iframe.contentWindow?.document;
-    if (doc) {
-      doc.open();
-      doc.write(html);
-      doc.close();
+  const handleShare = async () => {
+    const pdfBlob = await generatePDF();
+    if (!pdfBlob) {
+      alert('Error al generar el PDF.');
+      return;
+    }
 
-      setTimeout(() => {
-        try {
-          iframe.contentWindow?.focus();
-          iframe.contentWindow?.print();
-        } catch (e) {
-          console.error('Print failed:', e);
-        }
+    const file = new File([pdfBlob], 'ticket-poseidon.pdf', { type: 'application/pdf' });
+
+    if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+      try {
+        await navigator.share({
+          title: 'Ticket Poseidon',
+          text: 'Adjunto el ticket de su reservación/estancia.',
+          files: [file]
+        });
+      } catch (error) {
+        console.error('Error sharing:', error);
+      }
+    } else {
+      // Fallback: download the PDF if sharing is not supported
+      const url = URL.createObjectURL(pdfBlob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'ticket-poseidon.pdf';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+  };
+
+  const handlePrint = async () => {
+    const pdfBlob = await generatePDF();
+    if (!pdfBlob) {
+      alert('Error al generar el PDF.');
+      return;
+    }
+
+    const url = URL.createObjectURL(pdfBlob);
+    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    
+    if (isMobile) {
+      // On mobile, opening the PDF directly is usually the best way to trigger the native print/share dialog
+      const printWindow = window.open(url, '_blank');
+      if (!printWindow) {
+        // Fallback if popup blocked: download it
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'ticket-poseidon.pdf';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+      }
+    } else {
+      // Desktop (iframe)
+      const iframe = document.createElement('iframe');
+      iframe.style.position = 'fixed';
+      iframe.style.right = '0';
+      iframe.style.bottom = '0';
+      iframe.style.width = '0';
+      iframe.style.height = '0';
+      iframe.style.border = '0';
+      iframe.src = url;
+      document.body.appendChild(iframe);
+
+      iframe.onload = () => {
         setTimeout(() => {
-          document.body.removeChild(iframe);
-        }, 1000);
-      }, 500);
+          try {
+            iframe.contentWindow?.focus();
+            iframe.contentWindow?.print();
+          } catch (e) {
+            console.error('Print failed:', e);
+          }
+        }, 500);
+      };
     }
   };
 
@@ -64,23 +149,32 @@ export const PrintPreview = () => {
         
         <div className="flex-1 overflow-y-auto p-6 bg-slate-100 flex justify-center">
           <div 
+            ref={previewRef}
             className="bg-white shadow-lg p-8 w-full max-w-[80mm] min-h-[100mm] ticket-preview-content"
             dangerouslySetInnerHTML={{ __html: html }}
           />
         </div>
         
-        <div className="p-6 bg-white border-t border-slate-200 grid grid-cols-2 gap-4">
+        <div className="p-4 sm:p-6 bg-white border-t border-slate-200 grid grid-cols-3 gap-2 sm:gap-4">
           <button
             onClick={() => setIsOpen(false)}
-            className="px-6 py-4 bg-slate-100 hover:bg-slate-200 text-slate-600 font-black rounded-2xl uppercase tracking-widest transition-all"
+            className="px-2 sm:px-6 py-3 sm:py-4 bg-slate-100 hover:bg-slate-200 text-slate-600 font-black rounded-xl sm:rounded-2xl uppercase tracking-widest transition-all text-xs sm:text-sm"
           >
             Cerrar
           </button>
           <button
-            onClick={handlePrint}
-            className="px-6 py-4 bg-blue-600 hover:bg-blue-700 text-white font-black rounded-2xl uppercase tracking-widest transition-all shadow-lg shadow-blue-100 flex items-center justify-center gap-2"
+            onClick={handleShare}
+            disabled={isProcessing}
+            className="px-2 sm:px-6 py-3 sm:py-4 bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white font-black rounded-xl sm:rounded-2xl uppercase tracking-widest transition-all shadow-lg shadow-green-100 flex items-center justify-center gap-1 sm:gap-2 text-xs sm:text-sm"
           >
-            <Printer size={20} /> Imprimir / Guardar
+            <Share2 size={18} /> <span className="hidden sm:inline">{isProcessing ? 'Generando...' : 'Compartir'}</span><span className="sm:hidden">Comp.</span>
+          </button>
+          <button
+            onClick={handlePrint}
+            disabled={isProcessing}
+            className="px-2 sm:px-6 py-3 sm:py-4 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-black rounded-xl sm:rounded-2xl uppercase tracking-widest transition-all shadow-lg shadow-blue-100 flex items-center justify-center gap-1 sm:gap-2 text-xs sm:text-sm"
+          >
+            <Printer size={18} /> {isProcessing ? 'Generando...' : 'Imprimir'}
           </button>
         </div>
       </div>

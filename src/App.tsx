@@ -11,6 +11,7 @@ import History from './pages/History';
 import Users from './pages/Users';
 import Financial from './pages/Financial';
 import Reservations from './pages/Reservations';
+import { PrintPreview } from './components/PrintPreview';
 
 import { doc, getDocFromServer } from 'firebase/firestore';
 import { db } from './firebase';
@@ -67,6 +68,7 @@ export default function App() {
     <AuthProvider>
       <BrowserRouter>
         <AppRoutes />
+        <PrintPreview />
       </BrowserRouter>
     </AuthProvider>
   );

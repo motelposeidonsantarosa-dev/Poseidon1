@@ -159,7 +159,7 @@ export default function Financial() {
 
   const handleResetCounters = async () => {
     playClick();
-    if (resetConfirmText !== 'REINICIAR') {
+    if (resetConfirmText.trim().toUpperCase() !== 'REINICIAR') {
       playError();
       alert("Por favor escriba 'REINICIAR' para confirmar.");
       return;
@@ -175,8 +175,9 @@ export default function Financial() {
         balanceStartDate = subDays(new Date(), 30);
         periodLabel = 'Últimos 30 días';
       } else {
-        balanceStartDate = lastResetDate ? new Date(lastResetDate) : subDays(new Date(), 30);
-        periodLabel = lastResetDate ? `Desde el último reinicio (${format(balanceStartDate, 'dd/MM/yyyy')})` : 'Últimos 30 días';
+        const isValidDate = lastResetDate && !isNaN(new Date(lastResetDate).getTime());
+        balanceStartDate = isValidDate ? new Date(lastResetDate) : subDays(new Date(), 30);
+        periodLabel = isValidDate ? `Desde el último reinicio (${format(balanceStartDate, 'dd/MM/yyyy')})` : 'Últimos 30 días';
       }
       
       balanceStartDate.setHours(0, 0, 0, 0);
@@ -301,10 +302,10 @@ export default function Financial() {
       setShowResetModal(false);
       setResetConfirmText('');
       alert("Balances reiniciados a cero exitosamente.");
-    } catch (error) {
+    } catch (error: any) {
       playError();
       console.error("Error resetting counters:", error);
-      alert("Hubo un error al reiniciar los contadores.");
+      alert("Hubo un error al reiniciar los contadores: " + error.message);
     } finally {
       setLoading(false);
     }
@@ -442,7 +443,7 @@ export default function Financial() {
             <div className="flex flex-col gap-4">
               <button
                 onClick={handleResetCounters}
-                disabled={loading || resetConfirmText !== 'REINICIAR'}
+                disabled={loading || resetConfirmText.trim().toUpperCase() !== 'REINICIAR'}
                 className="w-full bg-red-600 hover:bg-red-700 disabled:bg-red-300 text-white font-black py-5 rounded-2xl text-xl shadow-lg shadow-red-100 transition-all active:scale-95 uppercase tracking-widest"
               >
                 {loading ? 'Procesando...' : 'Confirmar Reinicio'}

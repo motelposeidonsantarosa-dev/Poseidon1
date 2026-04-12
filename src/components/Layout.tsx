@@ -7,7 +7,6 @@ import { useState, useEffect } from 'react';
 import { collection, onSnapshot, query, where, getDocs, updateDoc, doc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { printTicket } from '../utils/print';
-import { PrintPreview } from './PrintPreview';
 
 export default function Layout() {
   const { appUser, logout, updatePin } = useAuth();
@@ -103,32 +102,44 @@ export default function Layout() {
     }
   };
 
+  const [isEndingShift, setIsEndingShift] = useState(false);
+
   const handleEndShiftAndLogout = async () => {
     playClick();
     if (!activeShiftId || !activeShiftStartTime || !appUser) return;
+    setIsEndingShift(true);
     
     try {
       // Fetch data for summary
-      const ticketsQ = query(collection(db, 'tickets'), where('hostName', '==', appUser.name), where('date', '>=', activeShiftStartTime));
+      const ticketsQ = query(collection(db, 'tickets'), where('hostName', '==', appUser.name));
       const ticketsSnap = await getDocs(ticketsQ);
       let totalIncome = 0;
       let incomeEfectivo = 0;
       let incomeTransferencia = 0;
+      let servicesCount = 0;
       
       ticketsSnap.forEach(doc => {
         const data = doc.data();
-        totalIncome += data.total;
-        if (data.paymentMethod === 'Transferencia') {
-          incomeTransferencia += data.total;
-        } else {
-          incomeEfectivo += data.total;
+        if (data.date >= activeShiftStartTime) {
+          servicesCount++;
+          totalIncome += data.total;
+          if (data.paymentMethod === 'Transferencia') {
+            incomeTransferencia += data.total;
+          } else {
+            incomeEfectivo += data.total;
+          }
         }
       });
 
-      const expensesQ = query(collection(db, 'expenses'), where('hostName', '==', appUser.name), where('date', '>=', activeShiftStartTime));
+      const expensesQ = query(collection(db, 'expenses'), where('hostName', '==', appUser.name));
       const expensesSnap = await getDocs(expensesQ);
       let totalExpenses = 0;
-      expensesSnap.forEach(doc => totalExpenses += doc.data().amount);
+      expensesSnap.forEach(doc => {
+        const data = doc.data();
+        if (data.date >= activeShiftStartTime) {
+          totalExpenses += data.amount;
+        }
+      });
 
       const utilidadesTotales = totalIncome - totalExpenses;
       const utilidadesEfectivo = incomeEfectivo - totalExpenses;
@@ -144,7 +155,7 @@ export default function Layout() {
         status: 'closed',
         totalIncome,
         totalExpenses,
-        servicesCount: ticketsSnap.size,
+        servicesCount: servicesCount,
         activeRoomsCount: activeRooms.length,
         pendingBalance
       };
@@ -192,7 +203,7 @@ export default function Layout() {
                 <div class="flex-between font-bold mt-2"><span>UTILIDADES:</span> <span>$${utilidadesTotales.toLocaleString()}</span></div>
                 <div class="flex-between text-slate-600"><span>- Efectivo:</span> <span>$${utilidadesEfectivo.toLocaleString()}</span></div>
                 <div class="flex-between text-slate-600"><span>- Transferencia:</span> <span>$${utilidadesTransferencia.toLocaleString()}</span></div>
-                <div class="flex-between mt-2"><span>Servicios Terminados:</span> <span>${ticketsSnap.size}</span></div>
+                <div class="flex-between mt-2"><span>Servicios Terminados:</span> <span>${servicesCount}</span></div>
               </div>
               <div class="border-t">
                 <div class="font-bold mb-2">Habitaciones Activas: ${activeRooms.length}</div>
@@ -208,20 +219,24 @@ export default function Layout() {
         `;
       
       printTicket(ticketHtml);
-
-      setShowEndShiftModal(false);
-      await logout();
       playSuccess();
+
+      // Small delay to ensure the print event is captured before unmounting/redirecting
+      setTimeout(async () => {
+        setShowEndShiftModal(false);
+        await logout();
+      }, 2000);
     } catch (err: any) {
       playError();
       alert('Error al cerrar turno: ' + err.message);
+      setIsEndingShift(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col 2xl:flex-row pb-20 2xl:pb-0">
+    <div className="min-h-screen bg-gray-50 flex flex-col lg:flex-row pb-20 lg:pb-0">
       {/* Mobile/Tablet Header (Logo Only) */}
-      <div className="2xl:hidden bg-slate-900 text-white p-4 flex justify-center items-center sticky top-0 z-40 shadow-md">
+      <div className="lg:hidden bg-slate-900 text-white p-4 flex justify-center items-center sticky top-0 z-40 shadow-md">
         <div className="flex items-center gap-2">
           <span className="text-2xl">🔱</span>
           <span className="font-black tracking-tighter text-xl uppercase">Poseidón</span>
@@ -229,7 +244,7 @@ export default function Layout() {
       </div>
 
       {/* Sidebar (Desktop Only) */}
-      <aside className="hidden 2xl:flex bg-slate-900 text-white w-64 flex-col sticky top-0 h-screen">
+      <aside className="hidden lg:flex bg-slate-900 text-white w-64 flex-col sticky top-0 h-screen">
         <div className="p-6 flex items-center gap-3 border-b border-slate-800">
           <span className="text-3xl">🔱</span>
           <span className="font-black tracking-tighter text-2xl uppercase">Poseidón</span>
@@ -281,14 +296,14 @@ export default function Layout() {
       </aside>
 
       {/* Bottom Navigation (Mobile/Tablet Only) */}
-      <nav className="2xl:hidden fixed bottom-0 left-0 right-0 bg-slate-900 text-white z-50 flex items-center justify-around p-2 border-t border-slate-800 shadow-[0_-4px_10px_rgba(0,0,0,0.3)]">
+      <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-slate-900 text-white z-50 flex items-center justify-start overflow-x-auto p-2 border-t border-slate-800 shadow-[0_-4px_10px_rgba(0,0,0,0.3)] scrollbar-hide">
         {navItems.map((item) => (
           <Link
             key={item.path}
             to={item.path}
             onClick={() => playClick()}
             className={cn(
-              "flex flex-col items-center gap-1 p-2 rounded-xl transition-all min-w-[64px]",
+              "flex flex-col items-center gap-1 p-2 rounded-xl transition-all min-w-[80px]",
               location.pathname === item.path
                 ? "text-blue-400"
                 : "text-slate-400"
@@ -300,7 +315,7 @@ export default function Layout() {
         ))}
         <button
           onClick={handleLogout}
-          className="flex flex-col items-center gap-1 p-2 text-red-400 min-w-[64px]"
+          className="flex flex-col items-center gap-1 p-2 text-red-400 min-w-[80px]"
         >
           <LogOut size={24} />
           <span className="text-[10px] font-black uppercase tracking-tighter">Salir</span>
@@ -308,7 +323,7 @@ export default function Layout() {
       </nav>
 
       {/* Main Content */}
-      <main className="flex-1 p-4 2xl:p-8 overflow-y-auto w-full max-w-7xl mx-auto">
+      <main className="flex-1 p-4 lg:p-8 overflow-y-auto w-full max-w-7xl mx-auto">
         <Outlet />
       </main>
 
@@ -367,9 +382,14 @@ export default function Layout() {
             <div className="flex flex-col gap-3">
               <button 
                 onClick={handleEndShiftAndLogout}
-                className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-4 rounded-xl text-lg shadow-lg transition-transform hover:scale-105 flex items-center justify-center gap-2"
+                disabled={isEndingShift}
+                className={cn(
+                  "w-full bg-red-600 hover:bg-red-700 text-white font-bold py-4 rounded-xl text-lg shadow-lg transition-transform hover:scale-105 flex items-center justify-center gap-2",
+                  isEndingShift && "opacity-50 cursor-not-allowed"
+                )}
               >
-                <StopCircle size={24} /> Terminar Turno y Salir
+                <StopCircle size={24} className={cn(isEndingShift && "animate-spin")} /> 
+                {isEndingShift ? 'Cerrando Turno...' : 'Terminar Turno y Salir'}
               </button>
               <button 
                 onClick={() => setShowEndShiftModal(false)}
@@ -383,7 +403,6 @@ export default function Layout() {
       )}
 
       {/* Global Print Preview Modal */}
-      <PrintPreview />
     </div>
   );
 }

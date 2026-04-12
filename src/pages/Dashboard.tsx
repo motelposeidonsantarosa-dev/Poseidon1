@@ -203,32 +203,44 @@ export default function Dashboard() {
     }
   };
 
+  const [isEndingShift, setIsEndingShift] = useState(false);
+
   const handleEndShift = async () => {
     playClick();
     if (!activeShift || !appUser) return;
+    setIsEndingShift(true);
     
     try {
       // Calculate totals for shift
-      const ticketsQ = query(collection(db, 'tickets'), where('hostName', '==', appUser.name), where('date', '>=', activeShift.startTime));
+      const ticketsQ = query(collection(db, 'tickets'), where('hostName', '==', appUser.name));
       const ticketsSnap = await getDocs(ticketsQ);
       let totalIncome = 0;
       let incomeEfectivo = 0;
       let incomeTransferencia = 0;
+      let servicesCount = 0;
       
       ticketsSnap.forEach(doc => {
         const data = doc.data();
-        totalIncome += data.total;
-        if (data.paymentMethod === 'Transferencia') {
-          incomeTransferencia += data.total;
-        } else {
-          incomeEfectivo += data.total; // Default to Efectivo if not specified
+        if (data.date >= activeShift.startTime) {
+          servicesCount++;
+          totalIncome += data.total;
+          if (data.paymentMethod === 'Transferencia') {
+            incomeTransferencia += data.total;
+          } else {
+            incomeEfectivo += data.total; // Default to Efectivo if not specified
+          }
         }
       });
 
-      const expensesQ = query(collection(db, 'expenses'), where('hostName', '==', appUser.name), where('date', '>=', activeShift.startTime));
+      const expensesQ = query(collection(db, 'expenses'), where('hostName', '==', appUser.name));
       const expensesSnap = await getDocs(expensesQ);
       let totalExpenses = 0;
-      expensesSnap.forEach(doc => totalExpenses += doc.data().amount);
+      expensesSnap.forEach(doc => {
+        const data = doc.data();
+        if (data.date >= activeShift.startTime) {
+          totalExpenses += data.amount;
+        }
+      });
 
       const utilidadesTotales = totalIncome - totalExpenses;
       const utilidadesEfectivo = incomeEfectivo - totalExpenses;
@@ -243,7 +255,7 @@ export default function Dashboard() {
         status: 'closed',
         totalIncome,
         totalExpenses,
-        servicesCount: ticketsSnap.size,
+        servicesCount: servicesCount,
         activeRoomsCount: activeRooms.length,
         pendingBalance
       };
@@ -291,7 +303,7 @@ export default function Dashboard() {
                 <div class="flex-between font-bold mt-2"><span>UTILIDADES:</span> <span>$${utilidadesTotales.toLocaleString()}</span></div>
                 <div class="flex-between text-slate-600"><span>- Efectivo:</span> <span>$${utilidadesEfectivo.toLocaleString()}</span></div>
                 <div class="flex-between text-slate-600"><span>- Transferencia:</span> <span>$${utilidadesTransferencia.toLocaleString()}</span></div>
-                <div class="flex-between mt-2"><span>Servicios Terminados:</span> <span>${ticketsSnap.size}</span></div>
+                <div class="flex-between mt-2"><span>Servicios Terminados:</span> <span>${servicesCount}</span></div>
               </div>
               <div class="border-t">
                 <div class="font-bold mb-2">Habitaciones Activas: ${activeRooms.length}</div>
@@ -307,12 +319,16 @@ export default function Dashboard() {
         `;
       
       printTicket(ticketHtml);
-
       playSuccess();
-      logout();
+
+      // Small delay to ensure the print event is captured before unmounting/redirecting
+      setTimeout(async () => {
+        await logout();
+      }, 2000);
     } catch (err) {
       playError();
       console.error(err);
+      setIsEndingShift(false);
     }
   };
 
@@ -383,9 +399,14 @@ export default function Dashboard() {
               ) : (
                 <button 
                   onClick={handleEndShift} 
-                  className="w-full 2xl:w-auto bg-red-600 hover:bg-red-700 text-white px-8 py-4 rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg transition-all active:scale-95"
+                  disabled={isEndingShift}
+                  className={cn(
+                    "w-full 2xl:w-auto bg-red-600 hover:bg-red-700 text-white px-8 py-4 rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg transition-all active:scale-95",
+                    isEndingShift && "opacity-50 cursor-not-allowed"
+                  )}
                 >
-                  <StopCircle size={24} /> Terminar Turno
+                  <StopCircle size={24} className={cn(isEndingShift && "animate-spin")} /> 
+                  {isEndingShift ? 'Cerrando Turno...' : 'Terminar Turno'}
                 </button>
               )}
             </div>
