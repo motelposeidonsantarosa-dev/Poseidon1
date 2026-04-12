@@ -1,0 +1,143 @@
+{
+  "entities": {
+    "AppUser": {
+      "title": "AppUser",
+      "description": "A user of the system (admin or host) with PIN auth",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "role": { "type": "string", "enum": ["admin", "host"] },
+        "pin": { "type": "string" },
+        "active": { "type": "boolean" }
+      },
+      "required": ["id", "name", "role", "pin", "active"]
+    },
+    "Room": {
+      "title": "Room",
+      "description": "A motel room",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "status": { "type": "string", "enum": ["Libre", "Ocupada", "Limpieza"] },
+        "startTime": { "type": "string", "format": "date-time", "description": "ISO string or null" },
+        "endTime": { "type": "string", "format": "date-time", "description": "ISO string or null" },
+        "persons": { "type": "number" },
+        "services": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": { "type": "string" },
+              "price": { "type": "number" },
+              "quantity": { "type": "number" }
+            }
+          }
+        },
+        "products": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string" },
+              "name": { "type": "string" },
+              "price": { "type": "number" },
+              "quantity": { "type": "number" }
+            }
+          }
+        },
+        "total": { "type": "number" },
+        "currentHostId": { "type": "string" },
+        "currentHostName": { "type": "string" }
+      },
+      "required": ["id", "name", "status", "persons", "services", "products", "total"]
+    },
+    "Product": {
+      "title": "Product",
+      "description": "Inventory item",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "price": { "type": "number" },
+        "stock": { "type": "number" },
+        "category": { "type": "string", "enum": ["Bebidas", "Sexshop", "Otros"] }
+      },
+      "required": ["id", "name", "price", "stock", "category"]
+    },
+    "Ticket": {
+      "title": "Ticket",
+      "description": "A completed stay receipt",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "roomId": { "type": "string" },
+        "roomName": { "type": "string" },
+        "startTime": { "type": "string", "format": "date-time" },
+        "endTime": { "type": "string", "format": "date-time" },
+        "products": { "type": "array" },
+        "services": { "type": "array" },
+        "total": { "type": "number" },
+        "date": { "type": "string", "format": "date-time" },
+        "hostName": { "type": "string" }
+      },
+      "required": ["id", "roomId", "roomName", "startTime", "endTime", "products", "services", "total", "date", "hostName"]
+    },
+    "Expense": {
+      "title": "Expense",
+      "description": "A registered expense",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "description": { "type": "string" },
+        "amount": { "type": "number" },
+        "category": { "type": "string", "enum": ["Agua", "Luz", "Internet", "Aseo", "Pago Host", "Otros"] },
+        "date": { "type": "string", "format": "date-time" },
+        "hostName": { "type": "string" }
+      },
+      "required": ["id", "description", "amount", "category", "date", "hostName"]
+    },
+    "Reservation": {
+      "title": "Reservation",
+      "description": "A room reservation",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "roomId": { "type": "string" },
+        "roomName": { "type": "string" },
+        "date": { "type": "string", "format": "date-time", "description": "ISO string of the reservation time" },
+        "clientName": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "cancelled", "completed"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "roomId", "roomName", "date", "clientName", "status", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/app_users/{userId}": {
+      "schema": { "$ref": "#/entities/AppUser" },
+      "description": "System users with PIN authentication"
+    },
+    "/rooms/{roomId}": {
+      "schema": { "$ref": "#/entities/Room" },
+      "description": "Motel rooms"
+    },
+    "/products/{productId}": {
+      "schema": { "$ref": "#/entities/Product" },
+      "description": "Inventory products"
+    },
+    "/tickets/{ticketId}": {
+      "schema": { "$ref": "#/entities/Ticket" },
+      "description": "Completed stay tickets"
+    },
+    "/expenses/{expenseId}": {
+      "schema": { "$ref": "#/entities/Expense" },
+      "description": "Registered expenses"
+    },
+    "/reservations/{reservationId}": {
+      "schema": { "$ref": "#/entities/Reservation" },
+      "description": "Room reservations"
+    }
+  }
+}
