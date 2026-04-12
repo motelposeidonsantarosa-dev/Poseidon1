@@ -39,7 +39,9 @@ export default function Reservations() {
   useEffect(() => {
     const q = query(collection(db, 'reservations'), orderBy('date', 'asc'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const resData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Reservation));
+      const resData = snapshot.docs
+        .map(doc => ({ id: doc.id, ...doc.data() } as Reservation))
+        .filter(res => res.status === 'pending'); // Only show active/pending reservations
       setReservations(resData);
     });
 

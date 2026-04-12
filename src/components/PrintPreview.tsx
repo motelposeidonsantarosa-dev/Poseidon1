@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Printer, Share2 } from 'lucide-react';
+import { X, Printer, Share2, Download } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
 
@@ -22,16 +22,48 @@ export const PrintPreview = () => {
   if (!isOpen || !html) return null;
 
   const generatePDF = async (): Promise<Blob | null> => {
-    if (!previewRef.current) return null;
+    if (!html) return null;
     
     try {
       setIsProcessing(true);
-      const canvas = await html2canvas(previewRef.current, {
+      
+      // Create an isolated iframe to prevent html2canvas from parsing Tailwind's oklch colors
+      const iframe = document.createElement('iframe');
+      iframe.style.position = 'absolute';
+      iframe.style.left = '-9999px';
+      iframe.style.top = '-9999px';
+      iframe.style.width = '302px'; // Exactly 80mm at 96 DPI to prevent mobile scaling issues
+      iframe.style.height = '2000px'; // Large enough to avoid scrolling
+      document.body.appendChild(iframe);
+      
+      const doc = iframe.contentWindow?.document;
+      if (!doc) {
+        document.body.removeChild(iframe);
+        return null;
+      }
+      
+      doc.open();
+      // Inject viewport meta tag to prevent mobile browsers from inflating text size
+      const modifiedHtml = html.replace('<head>', '<head><meta name="viewport" content="width=302, initial-scale=1.0, maximum-scale=1.0, user-scalable=0">');
+      doc.write(modifiedHtml);
+      doc.close();
+      
+      // Wait for rendering
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      const contentHeight = doc.body.scrollHeight || 1000;
+      iframe.style.height = `${contentHeight}px`;
+      
+      const canvas = await html2canvas(doc.body, {
         scale: 2,
         useCORS: true,
         logging: false,
-        backgroundColor: '#ffffff'
+        backgroundColor: '#ffffff',
+        windowWidth: doc.body.scrollWidth,
+        windowHeight: contentHeight
       });
+      
+      document.body.removeChild(iframe);
       
       const imgData = canvas.toDataURL('image/png');
       const pdfWidth = 80; // 80mm thermal paper
@@ -54,7 +86,10 @@ export const PrintPreview = () => {
   };
 
   const handleShare = async () => {
+    setIsProcessing(true);
     const pdfBlob = await generatePDF();
+    setIsProcessing(false);
+    
     if (!pdfBlob) {
       alert('Error al generar el PDF.');
       return;
@@ -81,54 +116,60 @@ export const PrintPreview = () => {
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
     }
   };
 
-  const handlePrint = async () => {
+  const handleSave = async () => {
+    setIsProcessing(true);
     const pdfBlob = await generatePDF();
+    setIsProcessing(false);
+
     if (!pdfBlob) {
       alert('Error al generar el PDF.');
       return;
     }
 
     const url = URL.createObjectURL(pdfBlob);
-    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-    
-    if (isMobile) {
-      // On mobile, opening the PDF directly is usually the best way to trigger the native print/share dialog
-      const printWindow = window.open(url, '_blank');
-      if (!printWindow) {
-        // Fallback if popup blocked: download it
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = 'ticket-poseidon.pdf';
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-      }
-    } else {
-      // Desktop (iframe)
-      const iframe = document.createElement('iframe');
-      iframe.style.position = 'fixed';
-      iframe.style.right = '0';
-      iframe.style.bottom = '0';
-      iframe.style.width = '0';
-      iframe.style.height = '0';
-      iframe.style.border = '0';
-      iframe.src = url;
-      document.body.appendChild(iframe);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `ticket-poseidon-${new Date().getTime()}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
 
-      iframe.onload = () => {
-        setTimeout(() => {
-          try {
-            iframe.contentWindow?.focus();
-            iframe.contentWindow?.print();
-          } catch (e) {
-            console.error('Print failed:', e);
-          }
-        }, 500);
-      };
+  const handlePrint = async () => {
+    // Open window immediately before async operation to bypass popup blockers
+    const printWindow = window.open('', '_blank');
+    if (printWindow) {
+      printWindow.document.write('<html><body style="font-family:sans-serif;text-align:center;padding-top:50px;">Generando PDF, por favor espere...</body></html>');
+    }
+
+    setIsProcessing(true);
+    const pdfBlob = await generatePDF();
+    setIsProcessing(false);
+
+    if (!pdfBlob) {
+      if (printWindow) printWindow.close();
+      alert('Error al generar el PDF.');
+      return;
+    }
+
+    const url = URL.createObjectURL(pdfBlob);
+    
+    if (printWindow) {
+      // Redirect the already opened window to the PDF blob
+      printWindow.location.href = url;
+    } else {
+      // Fallback if popup blocked entirely: download it
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'ticket-poseidon.pdf';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
     }
   };
 
@@ -155,26 +196,33 @@ export const PrintPreview = () => {
           />
         </div>
         
-        <div className="p-4 sm:p-6 bg-white border-t border-slate-200 grid grid-cols-3 gap-2 sm:gap-4">
+        <div className="p-4 sm:p-6 bg-white border-t border-slate-200 grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-4">
           <button
             onClick={() => setIsOpen(false)}
-            className="px-2 sm:px-6 py-3 sm:py-4 bg-slate-100 hover:bg-slate-200 text-slate-600 font-black rounded-xl sm:rounded-2xl uppercase tracking-widest transition-all text-xs sm:text-sm"
+            className="px-2 sm:px-4 py-3 sm:py-4 bg-slate-100 hover:bg-slate-200 text-slate-600 font-black rounded-xl sm:rounded-2xl uppercase tracking-widest transition-all text-xs sm:text-sm"
           >
             Cerrar
           </button>
           <button
+            onClick={handleSave}
+            disabled={isProcessing}
+            className="px-2 sm:px-4 py-3 sm:py-4 bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white font-black rounded-xl sm:rounded-2xl uppercase tracking-widest transition-all shadow-lg shadow-amber-100 flex items-center justify-center gap-1 sm:gap-2 text-xs sm:text-sm"
+          >
+            <Download size={18} /> <span className="hidden sm:inline">{isProcessing ? '...' : 'Guardar'}</span><span className="sm:hidden">Guardar</span>
+          </button>
+          <button
             onClick={handleShare}
             disabled={isProcessing}
-            className="px-2 sm:px-6 py-3 sm:py-4 bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white font-black rounded-xl sm:rounded-2xl uppercase tracking-widest transition-all shadow-lg shadow-green-100 flex items-center justify-center gap-1 sm:gap-2 text-xs sm:text-sm"
+            className="px-2 sm:px-4 py-3 sm:py-4 bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white font-black rounded-xl sm:rounded-2xl uppercase tracking-widest transition-all shadow-lg shadow-green-100 flex items-center justify-center gap-1 sm:gap-2 text-xs sm:text-sm"
           >
-            <Share2 size={18} /> <span className="hidden sm:inline">{isProcessing ? 'Generando...' : 'Compartir'}</span><span className="sm:hidden">Comp.</span>
+            <Share2 size={18} /> <span className="hidden sm:inline">{isProcessing ? '...' : 'Compartir'}</span><span className="sm:hidden">Comp.</span>
           </button>
           <button
             onClick={handlePrint}
             disabled={isProcessing}
-            className="px-2 sm:px-6 py-3 sm:py-4 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-black rounded-xl sm:rounded-2xl uppercase tracking-widest transition-all shadow-lg shadow-blue-100 flex items-center justify-center gap-1 sm:gap-2 text-xs sm:text-sm"
+            className="px-2 sm:px-4 py-3 sm:py-4 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-black rounded-xl sm:rounded-2xl uppercase tracking-widest transition-all shadow-lg shadow-blue-100 flex items-center justify-center gap-1 sm:gap-2 text-xs sm:text-sm"
           >
-            <Printer size={18} /> {isProcessing ? 'Generando...' : 'Imprimir'}
+            <Printer size={18} /> <span className="hidden sm:inline">{isProcessing ? '...' : 'Imprimir'}</span><span className="sm:hidden">Impr.</span>
           </button>
         </div>
       </div>
