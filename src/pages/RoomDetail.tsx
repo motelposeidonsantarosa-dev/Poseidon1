@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { doc, onSnapshot, updateDoc, collection, getDocs, addDoc, runTransaction, query, where, orderBy } from 'firebase/firestore';
+import { doc, onSnapshot, updateDoc, collection, getDocs, addDoc, runTransaction, query, where, orderBy, getDoc, increment } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useAuth } from '../contexts/AuthContext';
 import { useFeedback } from '../hooks/useFeedback';
@@ -127,6 +127,7 @@ export default function RoomDetail() {
   };
 
   const handleStartService = async () => {
+    playClick();
     if (appUser?.role === 'host' && !activeShift) {
       setShowNoShiftModal(true);
       return;
@@ -146,17 +147,21 @@ export default function RoomDetail() {
     const startTime = new Date();
     const endTime = new Date(startTime.getTime() + 180 * 60000); // 3 hours
     
-    await updateDoc(doc(db, 'rooms', room.id), {
+    // Fire and forget for instant UI feedback
+    updateDoc(doc(db, 'rooms', room.id), {
       status: 'Ocupada',
       startTime: startTime.toISOString(),
       endTime: endTime.toISOString(),
       persons: room.persons || 2,
       currentHostId: appUser?.id,
       currentHostName: appUser?.name
-    });
+    }).catch(console.error);
+    
+    playSuccess();
   };
 
   const handleAddExtraHour = async () => {
+    playClick();
     if (appUser?.role === 'host' && !activeShift) {
       setShowNoShiftModal(true);
       return;
@@ -166,80 +171,86 @@ export default function RoomDetail() {
     const newEnd = new Date(currentEnd.getTime() + 60 * 60000); // +1 hour
     const price = getServicePrice('Hora Adicional', 20000);
     
-    await updateDoc(doc(db, 'rooms', room.id), {
+    // Fire and forget for instant UI feedback
+    updateDoc(doc(db, 'rooms', room.id), {
       endTime: newEnd.toISOString(),
       total: room.total + price,
       services: [...room.services, { id: 'hora_extra_' + Date.now(), name: 'Hora Adicional', price: price, quantity: 1 }]
-    });
+    }).catch(console.error);
   };
 
   const handleAddPerson = async () => {
+    playClick();
     if (appUser?.role === 'host' && !activeShift) {
       setShowNoShiftModal(true);
       return;
     }
     const price = getServicePrice('Persona Adicional', 20000);
-    await updateDoc(doc(db, 'rooms', room.id), {
+    
+    // Fire and forget for instant UI feedback
+    updateDoc(doc(db, 'rooms', room.id), {
       persons: room.persons + 1,
       total: room.total + price,
       services: [...room.services, { id: 'persona_extra_' + Date.now(), name: 'Persona Adicional', price: price, quantity: 1 }]
-    });
+    }).catch(console.error);
   };
 
   const handleAddService = async (serviceName: string) => {
+    playClick();
     if (appUser?.role === 'host' && !activeShift) {
       setShowNoShiftModal(true);
       return;
     }
     const price = getServicePrice(serviceName, 20000);
-    await updateDoc(doc(db, 'rooms', room.id), {
+    
+    // Fire and forget for instant UI feedback
+    updateDoc(doc(db, 'rooms', room.id), {
       total: room.total + price,
       services: [...room.services, { id: 'srv_' + Date.now(), name: serviceName, price: price, quantity: 1 }]
-    });
+    }).catch(console.error);
   };
 
   const handleAddProduct = async (product: InventoryProduct) => {
+    playClick();
     if (appUser?.role === 'host' && !activeShift) {
       setShowNoShiftModal(true);
       return;
     }
     if (product.stock <= 0) {
+      playError();
       alert('Sin stock');
       return;
     }
 
+    // Optimistic UI Update for instant feedback
+    const existingProductIndex = room.products.findIndex(p => p.id === product.id);
+    let newProducts = [...room.products];
+    if (existingProductIndex >= 0) {
+      newProducts[existingProductIndex].quantity += 1;
+    } else {
+      newProducts.push({ id: product.id, name: product.name, price: product.price, quantity: 1 });
+    }
+    
+    const newTotal = room.total + product.price;
+
+    setRoom(prev => prev ? { ...prev, products: newProducts, total: newTotal } : prev);
+
     try {
-      await runTransaction(db, async (transaction) => {
-        const productRef = doc(db, 'products', product.id);
-        const productDoc = await transaction.get(productRef);
-        if (!productDoc.exists() || productDoc.data().stock <= 0) {
-          throw new Error("Sin stock");
-        }
-
-        const currentStock = productDoc.data().stock;
-        transaction.update(productRef, { stock: currentStock - 1 });
-
-        const existingProductIndex = room.products.findIndex(p => p.id === product.id);
-        let newProducts = [...room.products];
-        
-        if (existingProductIndex >= 0) {
-          newProducts[existingProductIndex].quantity += 1;
-        } else {
-          newProducts.push({ id: product.id, name: product.name, price: product.price, quantity: 1 });
-        }
-
-        transaction.update(doc(db, 'rooms', room.id), {
-          products: newProducts,
-          total: room.total + product.price
-        });
+      // Fire and forget updates for instant feel
+      updateDoc(doc(db, 'products', product.id), { stock: increment(-1) });
+      updateDoc(doc(db, 'rooms', room.id), {
+        products: newProducts,
+        total: newTotal
       });
     } catch (e) {
       console.error(e);
+      playError();
       alert('Error al agregar producto');
     }
   };
 
   const handleRemoveItem = async (item: ProductItem, type: 'product' | 'service') => {
+    playClick();
     if (appUser?.role === 'host' && !activeShift) {
       setShowNoShiftModal(true);
       return;
@@ -251,33 +262,31 @@ export default function RoomDetail() {
         total: room.total - (item.price * item.quantity)
       });
     } else {
+      // Optimistic UI Update for instant feedback
+      let newProducts = [...room.products];
+      const index = newProducts.findIndex(p => p.id === item.id);
+      
+      if (index >= 0) {
+        if (newProducts[index].quantity > 1) {
+          newProducts[index].quantity -= 1;
+        } else {
+          newProducts.splice(index, 1);
+        }
+      }
+
+      const newTotal = room.total - item.price;
+      setRoom(prev => prev ? { ...prev, products: newProducts, total: newTotal } : prev);
+
       try {
-        await runTransaction(db, async (transaction) => {
-          const productRef = doc(db, 'products', item.id);
-          const productDoc = await transaction.get(productRef);
-          
-          if (productDoc.exists()) {
-            transaction.update(productRef, { stock: productDoc.data().stock + 1 });
-          }
-
-          let newProducts = [...room.products];
-          const index = newProducts.findIndex(p => p.id === item.id);
-          
-          if (index >= 0) {
-            if (newProducts[index].quantity > 1) {
-              newProducts[index].quantity -= 1;
-            } else {
-              newProducts.splice(index, 1);
-            }
-          }
-
-          transaction.update(doc(db, 'rooms', room.id), {
-            products: newProducts,
-            total: room.total - item.price
-          });
+        // Fire and forget updates
+        updateDoc(doc(db, 'products', item.id), { stock: increment(1) });
+        updateDoc(doc(db, 'rooms', room.id), {
+          products: newProducts,
+          total: newTotal
         });
       } catch (e) {
         console.error(e);
+        playError();
       }
     }
   };
@@ -287,6 +296,18 @@ export default function RoomDetail() {
       setShowNoShiftModal(true);
       return;
     }
+    let currentInvoiceNumber: number | null = null;
+    try {
+      const invoiceRef = doc(db, 'settings', 'invoice');
+      const invoiceDoc = await getDoc(invoiceRef);
+      if (invoiceDoc.exists() && invoiceDoc.data().enabled) {
+        currentInvoiceNumber = invoiceDoc.data().currentNumber;
+        await updateDoc(invoiceRef, { currentNumber: currentInvoiceNumber! + 1 });
+      }
+    } catch (e) {
+      console.error("Error with invoice number", e);
+    }
+
     const ticket = {
       roomId: room.id,
       roomName: room.name,
@@ -297,7 +318,8 @@ export default function RoomDetail() {
       total: room.total,
       date: new Date().toISOString(),
       hostName: appUser?.name || 'Desconocido',
-      paymentMethod
+      paymentMethod,
+      invoiceNumber: currentInvoiceNumber
     };
 
     await addDoc(collection(db, 'tickets'), ticket);
@@ -321,15 +343,15 @@ export default function RoomDetail() {
           <head>
             <title>Ticket ${room.name}</title>
             <style>
-              @page { margin: 0; size: 80mm auto; }
-              body { font-family: monospace; width: 80mm; margin: 0 auto; padding: 5mm; box-sizing: border-box; font-size: 12px; }
+              @page { margin: 0; size: 58mm auto; }
+              body { font-family: monospace; width: 100%; margin: 0 auto; padding: 2mm; box-sizing: border-box; font-size: 10px; }
               .text-center { text-align: center; }
               .font-bold { font-weight: bold; }
-              .text-2xl { font-size: 1.5rem; }
-              .mb-4 { margin-bottom: 1rem; }
+              .text-2xl { font-size: 1.2rem; }
+              .mb-4 { margin-bottom: 0.5rem; }
               .flex-between { display: flex; justify-content: space-between; }
-              .border-t { border-top: 1px dashed #000; padding-top: 10px; margin-top: 10px; }
-              .border-b { border-bottom: 1px dashed #000; padding-bottom: 10px; margin-bottom: 10px; }
+              .border-t { border-top: 1px dashed #000; padding-top: 5px; margin-top: 5px; }
+              .border-b { border-bottom: 1px dashed #000; padding-bottom: 5px; margin-bottom: 5px; }
               table { width: 100%; text-align: left; border-collapse: collapse; }
               th, td { padding: 4px 0; }
               th { border-bottom: 1px solid #000; }
@@ -341,11 +363,13 @@ export default function RoomDetail() {
               <div class="text-2xl">🔱</div>
               <h1 class="font-bold">POSEIDÓN</h1>
               <p>Motel</p>
+              <p>NIT: 1095823098-1</p>
               <p>Km 1 Vía Santa Rosa-Simití</p>
               <p>Cel: 3157170874</p>
               <p>motelposeidonsantarosa@gmail.com</p>
               <p>instagram:@motel_poseidon</p>
               <p>Facebook: @PoseidonMot</p>
+              ${currentInvoiceNumber !== null ? `<p style="font-size: 1.2rem; font-weight: bold; margin-top: 5px;">FACTURA NÚMERO: ${currentInvoiceNumber}</p>` : ''}
             </div>
             <div class="border-t border-b">
               <div class="flex-between"><span>Habitación:</span> <strong>${room.name}</strong></div>
@@ -403,6 +427,7 @@ export default function RoomDetail() {
   };
 
   const handleSetFree = async () => {
+    playClick();
     if (appUser?.role === 'host' && !activeShift) {
       setShowNoShiftModal(true);
       return;
@@ -418,6 +443,7 @@ export default function RoomDetail() {
       currentHostId: null,
       currentHostName: null
     });
+    playSuccess();
     navigate('/');
   };
 
@@ -543,7 +569,7 @@ export default function RoomDetail() {
               <div className="flex items-center gap-6">
                 <div className={cn(
                   "p-5 rounded-2xl",
-                  isWarning ? "bg-white/20" : "bg-blue-50 text-blue-600"
+                  isWarning ? "bg-white/20" : room.status === 'Ocupada' ? "bg-green-50 text-green-600" : "bg-blue-50 text-blue-600"
                 )}>
                   <Clock size={48} />
                 </div>
@@ -551,7 +577,10 @@ export default function RoomDetail() {
                   <div className={cn("text-sm font-bold uppercase tracking-wider mb-1", isWarning ? "text-white/80" : "text-slate-500")}>
                     {room.status === 'Libre' ? 'Estado' : 'Tiempo Restante'}
                   </div>
-                  <div className="text-6xl font-black font-mono tracking-tighter">
+                  <div className={cn(
+                    "text-6xl font-black font-mono tracking-tighter",
+                    room.status === 'Ocupada' && !isWarning ? "text-green-500" : ""
+                  )}>
                     {room.status === 'Libre' ? '00:00:00' : timeLeftStr}
                   </div>
                 </div>
@@ -559,7 +588,7 @@ export default function RoomDetail() {
               {room.status === 'Libre' ? (
                 <button 
                   onClick={handleStartService}
-                  className="w-full lg:w-auto px-10 py-5 rounded-2xl font-black text-xl flex items-center justify-center gap-3 bg-blue-600 text-white hover:bg-blue-700 shadow-lg shadow-blue-200 transition-all active:scale-95"
+                  className="w-full lg:w-auto lg:px-6 xl:px-10 py-5 rounded-2xl font-black text-xl flex items-center justify-center gap-3 bg-green-500 text-white hover:bg-green-600 shadow-lg shadow-green-200 transition-all active:scale-95"
                 >
                   <Clock size={28} /> Iniciar Tiempo
                 </button>
@@ -567,7 +596,7 @@ export default function RoomDetail() {
                 <button 
                   onClick={handleAddExtraHour}
                   className={cn(
-                    "w-full lg:w-auto px-10 py-5 rounded-2xl font-black text-xl flex items-center justify-center gap-3 shadow-lg transition-all active:scale-95",
+                    "w-full lg:w-auto lg:px-6 xl:px-10 py-5 rounded-2xl font-black text-xl flex items-center justify-center gap-3 shadow-lg transition-all active:scale-95",
                     isWarning ? "bg-white text-red-600 hover:bg-red-50" : "bg-blue-600 text-white hover:bg-blue-700 shadow-blue-200"
                   )}
                 >
@@ -624,10 +653,10 @@ export default function RoomDetail() {
                           : "bg-slate-50 text-slate-400 cursor-not-allowed border-slate-200"
                       )}
                     >
-                      <Plus size={20} />
-                      <span className="text-sm text-center line-clamp-1">{prod.name}</span>
-                      <span className="text-xs opacity-70">${prod.price.toLocaleString()}</span>
-                      <span className="text-[10px] bg-black/10 px-2 py-0.5 rounded-full">Stock: {prod.stock}</span>
+                      <Plus size={20} className="shrink-0" />
+                      <span className="text-sm text-center leading-tight break-words w-full">{prod.name}</span>
+                      <span className="text-xs opacity-70 shrink-0">${prod.price.toLocaleString()}</span>
+                      <span className="text-[10px] bg-black/10 px-2 py-0.5 rounded-full shrink-0">Stock: {prod.stock}</span>
                     </button>
                   ))}
                 </div>
@@ -653,10 +682,10 @@ export default function RoomDetail() {
                           : "bg-slate-50 text-slate-400 cursor-not-allowed border-slate-200"
                       )}
                     >
-                      <Plus size={20} />
-                      <span className="text-sm text-center line-clamp-1">{prod.name}</span>
-                      <span className="text-xs opacity-70">${prod.price.toLocaleString()}</span>
-                      <span className="text-[10px] bg-black/10 px-2 py-0.5 rounded-full">Stock: {prod.stock}</span>
+                      <Plus size={20} className="shrink-0" />
+                      <span className="text-sm text-center leading-tight break-words w-full">{prod.name}</span>
+                      <span className="text-xs opacity-70 shrink-0">${prod.price.toLocaleString()}</span>
+                      <span className="text-[10px] bg-black/10 px-2 py-0.5 rounded-full shrink-0">Stock: {prod.stock}</span>
                     </button>
                   ))}
                 </div>

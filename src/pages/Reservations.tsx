@@ -184,7 +184,7 @@ export default function Reservations() {
 
               {res.status === 'pending' && (
                 <button
-                  onClick={() => setCancellingId(res.id)}
+                  onClick={() => { playClick(); setCancellingId(res.id); }}
                   className="w-full py-3 bg-red-50 hover:bg-red-100 text-red-600 rounded-xl font-black uppercase tracking-widest text-xs transition-colors flex items-center justify-center gap-2"
                 >
                   <Trash2 size={16} /> Cancelar Reserva
@@ -208,7 +208,7 @@ export default function Reservations() {
               
               <div className="grid grid-cols-2 gap-4">
                 <button
-                  onClick={() => setCancellingId(null)}
+                  onClick={() => { playClick(); setCancellingId(null); }}
                   className="py-4 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-2xl font-bold transition-colors"
                 >
                   No, Volver

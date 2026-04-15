@@ -19,3 +19,24 @@
     - Optimized layout for tablets to prevent hidden buttons in room details.
 
 **Instruction:** If the user says "VUELVE AL CODIGO GUADALUPE" or "CODIGO GUADALUPE", the agent should attempt to revert any changes made after this checkpoint to restore the functionality and design described above.
+
+## CODIGO GUADALUPE 3007
+- **Date:** 2026-04-15
+- **Description:** This checkpoint builds upon CODIGO GUADALUPE and includes the following recent updates:
+    - **UI/UX:** Reverted sidebar/bottom nav to original behavior (bottom nav on mobile/tablet portrait, sidebar on desktop).
+    - **Mobile Landscape:** Bottom navigation moves to a scrollable left sidebar specifically for mobile landscape mode (`@media(max-height:600px) and (max-width:960px) and (orientation:landscape)`), maximizing vertical space. Fixed scrolling issues to ensure full menu visibility.
+    - **Mobile Landscape Dashboard:** Room cards automatically shrink and display in a 5-column grid (`grid-cols-5`) when a mobile device is turned horizontally, allowing all 5 rooms to be visible on screen simultaneously without scrolling.
+    - **Mobile Tables (Landscape & Portrait):** Tables in Expenses, History, Inventory, and Users automatically shrink proportionally (reduced padding, font sizes, and icon sizes) to fit all columns on the screen without horizontal scrolling in both vertical and horizontal mobile views.
+    - **Desktop Dashboard:** Room cards are now larger and displayed in a 3-column grid (`xl:grid-cols-3`) on desktop screens, showing 3 on top and 2 on the bottom.
+    - **Navigation Feedback:** Active navigation items across all devices now use a golden/amber color (`text-amber-400`) with a subtle glow (`drop-shadow`) to match the trident logo, instead of the previous blue.
+    - **Haptic/Audio Feedback (Reinforced):** Improved `useFeedback` hook with much stronger, more distinct vibration patterns (25ms for click, [40, 60, 40] for success, [60, 60, 60, 60] for error) for mobile/tablet. Increased audio volume (0.4 for click, 0.5 for success/error) to ensure clear audible feedback on desktop.
+    - **Performance Optimization (Instant UI):** Refactored room actions (adding products, services, extra hours, persons, and starting service) to use Optimistic UI updates and fire-and-forget Firestore writes. This eliminates network latency, making the UI feel completely instant and highly responsive.
+    - **Dashboard:** Tablet landscape mode now displays rooms in a 3-top / 2-bottom grid (`grid-cols-3` for `md`).
+    - **Room Details:** "Iniciar Tiempo" button is now bright green (`bg-green-500`) and the active timer text/icon turns green when occupied. "1 Hora Adicional" button remains blue but its width is reduced in tablet landscape to match "Iniciar Tiempo".
+    - **History:** Administrators can now filter history by specific User (Host/Admin) in addition to date ranges.
+    - **Expenses:** Administrators have a new "Acciones" column to Edit (modify description, amount, category) and Delete expenses.
+    - **Tickets:** Added "NIT: 1095823098-1" to all tickets. Fixed dynamic island overlap on iPhones (`safe-area-inset-top`). Added consecutive invoice numbering for room sales.
+    - **Financials:** Added date/time filtering for generating balances.
+    - **Code Quality:** Fully linted and compiled, ready for production deployment on Netlify/Vercel.
+
+**Instruction:** If the user says "VUELVE AL CODIGO GUADALUPE 3007" or "CODIGO GUADALUPE 3007" or "GUADALUPE3007", the agent should attempt to revert any changes made after this checkpoint to restore the functionality and design described above.

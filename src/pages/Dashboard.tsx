@@ -268,14 +268,14 @@ export default function Dashboard() {
             <head>
               <title>Resumen de Turno</title>
               <style>
-                @page { margin: 0; size: 80mm auto; }
-                body { font-family: monospace; width: 80mm; margin: 0 auto; padding: 5mm; box-sizing: border-box; font-size: 12px; }
+                @page { margin: 0; size: 58mm auto; }
+                body { font-family: monospace; width: 100%; margin: 0 auto; padding: 2mm; box-sizing: border-box; font-size: 10px; }
                 .text-center { text-align: center; }
                 .font-bold { font-weight: bold; }
-                .text-2xl { font-size: 1.5rem; }
-                .mb-4 { margin-bottom: 1rem; }
+                .text-2xl { font-size: 1.2rem; }
+                .mb-4 { margin-bottom: 0.5rem; }
                 .flex-between { display: flex; justify-content: space-between; }
-                .border-t { border-top: 1px dashed #000; padding-top: 10px; margin-top: 10px; }
+                .border-t { border-top: 1px dashed #000; padding-top: 5px; margin-top: 5px; }
               </style>
             </head>
             <body>
@@ -283,6 +283,7 @@ export default function Dashboard() {
                 <div class="text-2xl">🔱</div>
                 <h1 class="font-bold">POSEIDÓN</h1>
                 <p>Motel</p>
+                <p>NIT: 1095823098-1</p>
                 <p>Km 1 Vía Santa Rosa-Simití</p>
                 <p>Cel: 3157170874</p>
                 <p>motelposeidonsantarosa@gmail.com</p>
@@ -383,7 +384,7 @@ export default function Dashboard() {
         <h1 className="text-3xl font-bold text-slate-900">Estado de Habitaciones</h1>
         <div className="flex gap-3">
           {appUser?.role === 'admin' && (
-            <button onClick={() => setShowAddRoom(true)} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl font-bold flex items-center gap-2 shadow-lg transition-transform hover:scale-105">
+            <button onClick={() => { playClick(); setShowAddRoom(true); }} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl font-bold flex items-center gap-2 shadow-lg transition-transform hover:scale-105">
               <Plus size={20} /> Añadir Habitación
             </button>
           )}
@@ -414,7 +415,7 @@ export default function Dashboard() {
         </div>
       </div>
       
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-3 [@media(max-height:600px)_and_(max-width:960px)_and_(orientation:landscape)]:grid-cols-5 gap-2 sm:gap-6 xl:gap-8 [@media(max-height:600px)_and_(max-width:960px)_and_(orientation:landscape)]:gap-2">
         {rooms.map(room => {
           const isOccupied = room.status === 'Ocupada';
           const isCleaning = room.status === 'Limpieza';
@@ -466,7 +467,7 @@ export default function Dashboard() {
               to={`/room/${room.id}`}
               onClick={playClick}
               className={cn(
-                "rounded-2xl p-6 shadow-lg border-2 transition-all active:scale-95 flex flex-col h-full text-white min-h-[220px]",
+                "rounded-xl sm:rounded-2xl p-3 sm:p-6 xl:p-8 [@media(max-height:600px)_and_(max-width:960px)_and_(orientation:landscape)]:p-2 shadow-lg border-2 transition-all active:scale-95 flex flex-col h-full text-white min-h-[130px] sm:min-h-[220px] xl:min-h-[280px] [@media(max-height:600px)_and_(max-width:960px)_and_(orientation:landscape)]:min-h-[100px]",
                 isActuallyFree && !isReservedSoon && "bg-emerald-500 border-emerald-600",
                 isActuallyFree && isReservedSoon && "bg-blue-600 border-blue-500 shadow-[0_0_30px_rgba(37,99,235,0.7)] animate-pulse",
                 isOccupied && !isWarning && "bg-red-600 border-red-700",
@@ -474,10 +475,10 @@ export default function Dashboard() {
                 isCleaning && "bg-yellow-500 border-yellow-600"
               )}
             >
-              <div className="flex justify-between items-start mb-4">
+              <div className="flex justify-between items-start mb-2 sm:mb-4">
                 <div>
-                  <div className="flex items-center gap-2">
-                    <h2 className="text-3xl font-black drop-shadow-md">
+                  <div className="flex items-center gap-1 sm:gap-2">
+                    <h2 className="text-xl sm:text-3xl xl:text-4xl [@media(max-height:600px)_and_(max-width:960px)_and_(orientation:landscape)]:text-xs font-black drop-shadow-md">
                       {room.name}
                     </h2>
                     {appUser?.role === 'admin' && (
@@ -489,35 +490,41 @@ export default function Dashboard() {
                           setEditingRoom(room);
                           setEditRoomName(room.name);
                         }}
-                        className="p-2 bg-white/20 hover:bg-white/40 rounded-full transition-colors"
+                        className="p-1 sm:p-2 bg-white/20 hover:bg-white/40 rounded-full transition-colors"
                       >
-                        <Edit2 size={18} />
+                        <Edit2 size={14} className="sm:hidden" />
+                        <Edit2 size={18} className="hidden sm:block" />
                       </button>
                     )}
                   </div>
-                  <span className="inline-block px-3 py-1 rounded-full text-sm font-bold mt-2 bg-black/20 backdrop-blur-sm uppercase tracking-wider">
+                  <span className="inline-block px-2 sm:px-3 xl:px-4 py-0.5 sm:py-1 xl:py-1.5 rounded-full text-[9px] sm:text-sm xl:text-base [@media(max-height:600px)_and_(max-width:960px)_and_(orientation:landscape)]:text-[7px] [@media(max-height:600px)_and_(max-width:960px)_and_(orientation:landscape)]:px-1.5 [@media(max-height:600px)_and_(max-width:960px)_and_(orientation:landscape)]:py-0.5 font-bold mt-1 sm:mt-2 xl:mt-3 bg-black/20 backdrop-blur-sm uppercase tracking-wider">
                     {isReservedSoon && isActuallyFree ? 'RESERVADA PRONTO' : room.status}
                   </span>
                 </div>
-                <BedDouble size={40} className="opacity-80" />
+                <BedDouble size={24} className="sm:hidden [@media(max-height:600px)_and_(max-width:960px)_and_(orientation:landscape)]:block [@media(max-height:600px)_and_(max-width:960px)_and_(orientation:landscape)]:w-4 [@media(max-height:600px)_and_(max-width:960px)_and_(orientation:landscape)]:h-4 opacity-80" />
+                <BedDouble size={40} className="hidden sm:block xl:hidden [@media(max-height:600px)_and_(max-width:960px)_and_(orientation:landscape)]:hidden opacity-80" />
+                <BedDouble size={56} className="hidden xl:block opacity-80" />
               </div>
 
               {isReservedSoon && (
                 <div className={cn(
-                  "mt-4 space-y-2 p-3 rounded-xl backdrop-blur-sm border",
+                  "mt-2 sm:mt-4 space-y-1 sm:space-y-2 p-2 sm:p-3 rounded-lg sm:rounded-xl backdrop-blur-sm border",
                   isActuallyFree ? "bg-white/20 border-white/30" : "bg-blue-600/40 border-blue-400/50"
                 )}>
-                  <div className="flex items-center gap-2 text-sm font-black uppercase tracking-tight">
-                    <CalendarCheck size={18} />
+                  <div className="flex items-center gap-1 sm:gap-2 text-[10px] sm:text-sm [@media(max-height:600px)_and_(max-width:960px)_and_(orientation:landscape)]:text-[8px] font-black uppercase tracking-tight">
+                    <CalendarCheck size={14} className="sm:hidden" />
+                    <CalendarCheck size={18} className="hidden sm:block" />
                     RESERVA: {format(parseISO(upcomingReservation.date), 'HH:mm')}
                   </div>
-                  <div className="flex items-center gap-2 font-bold text-xs truncate">
-                    <User size={14} />
+                  <div className="flex items-center gap-1 sm:gap-2 font-bold text-[9px] sm:text-xs [@media(max-height:600px)_and_(max-width:960px)_and_(orientation:landscape)]:text-[7px] truncate">
+                    <User size={12} className="sm:hidden" />
+                    <User size={14} className="hidden sm:block" />
                     {upcomingReservation.clientName}
                   </div>
                   {isActuallyFree && (
-                    <div className="flex items-center gap-2 font-bold text-[10px] text-blue-50 uppercase">
-                      <AlertCircle size={14} />
+                    <div className="flex items-center gap-1 sm:gap-2 font-bold text-[8px] sm:text-[10px] [@media(max-height:600px)_and_(max-width:960px)_and_(orientation:landscape)]:text-[6px] text-blue-50 uppercase">
+                      <AlertCircle size={10} className="sm:hidden" />
+                      <AlertCircle size={14} className="hidden sm:block" />
                       NO OCUPAR
                     </div>
                   )}
@@ -525,30 +532,36 @@ export default function Dashboard() {
               )}
 
               {isOccupied && (
-                <div className="mt-auto space-y-3 bg-black/10 p-4 rounded-xl backdrop-blur-sm">
-                  <div className="flex items-center gap-2 text-xl font-mono font-bold">
-                    <Clock size={24} />
+                <div className="mt-auto space-y-1 sm:space-y-3 bg-black/10 p-2 sm:p-4 [@media(max-height:600px)_and_(max-width:960px)_and_(orientation:landscape)]:p-1.5 rounded-lg sm:rounded-xl backdrop-blur-sm">
+                  <div className="flex items-center gap-1 sm:gap-2 text-sm sm:text-xl xl:text-2xl [@media(max-height:600px)_and_(max-width:960px)_and_(orientation:landscape)]:text-[10px] font-mono font-bold">
+                    <Clock size={16} className="sm:hidden [@media(max-height:600px)_and_(max-width:960px)_and_(orientation:landscape)]:block [@media(max-height:600px)_and_(max-width:960px)_and_(orientation:landscape)]:w-3 [@media(max-height:600px)_and_(max-width:960px)_and_(orientation:landscape)]:h-3" />
+                    <Clock size={24} className="hidden sm:block xl:hidden [@media(max-height:600px)_and_(max-width:960px)_and_(orientation:landscape)]:hidden" />
+                    <Clock size={32} className="hidden xl:block" />
                     {timeLeftStr}
                   </div>
-                  <div className="flex items-center gap-2 font-medium text-lg">
-                    <Users size={24} />
+                  <div className="flex items-center gap-1 sm:gap-2 font-medium text-xs sm:text-lg xl:text-xl [@media(max-height:600px)_and_(max-width:960px)_and_(orientation:landscape)]:text-[8px]">
+                    <Users size={16} className="sm:hidden [@media(max-height:600px)_and_(max-width:960px)_and_(orientation:landscape)]:block [@media(max-height:600px)_and_(max-width:960px)_and_(orientation:landscape)]:w-3 [@media(max-height:600px)_and_(max-width:960px)_and_(orientation:landscape)]:h-3" />
+                    <Users size={24} className="hidden sm:block xl:hidden [@media(max-height:600px)_and_(max-width:960px)_and_(orientation:landscape)]:hidden" />
+                    <Users size={32} className="hidden xl:block" />
                     {room.persons} Personas
                   </div>
-                  <div className="text-3xl font-black mt-4 drop-shadow-md">
+                  <div className="text-base sm:text-3xl xl:text-5xl [@media(max-height:600px)_and_(max-width:960px)_and_(orientation:landscape)]:text-xs font-black mt-1 sm:mt-4 xl:mt-6 [@media(max-height:600px)_and_(max-width:960px)_and_(orientation:landscape)]:mt-1 drop-shadow-md">
                     ${room.total.toLocaleString('es-CO')}
                   </div>
                 </div>
               )}
 
               {isActuallyFree && !isReservedSoon && (
-                <div className="mt-auto text-xl font-bold opacity-90 flex items-center gap-2">
-                  <PlayCircle size={24} /> Lista para usar
+                <div className="mt-auto text-xs sm:text-xl [@media(max-height:600px)_and_(max-width:960px)_and_(orientation:landscape)]:text-[9px] font-bold opacity-90 flex items-center gap-1 sm:gap-2">
+                  <PlayCircle size={16} className="sm:hidden [@media(max-height:600px)_and_(max-width:960px)_and_(orientation:landscape)]:block [@media(max-height:600px)_and_(max-width:960px)_and_(orientation:landscape)]:w-3 [@media(max-height:600px)_and_(max-width:960px)_and_(orientation:landscape)]:h-3" />
+                  <PlayCircle size={24} className="hidden sm:block [@media(max-height:600px)_and_(max-width:960px)_and_(orientation:landscape)]:hidden" />
+                  Lista para usar
                 </div>
               )}
               
               {isCleaning && (
-                <div className="mt-auto text-xl font-bold opacity-90">
-                  En mantenimiento / limpieza
+                <div className="mt-auto text-xs sm:text-xl [@media(max-height:600px)_and_(max-width:960px)_and_(orientation:landscape)]:text-[9px] font-bold opacity-90">
+                  En mantenimiento
                 </div>
               )}
             </Link>

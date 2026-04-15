@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { collection, query, where, getDocs, deleteDoc, doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useFeedback } from '../hooks/useFeedback';
-import { Calculator, Printer, Trash2, X, AlertTriangle, Calendar, History } from 'lucide-react';
+import { Calculator, Printer, Trash2, X, AlertTriangle, Calendar, History, FileText, Save } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { format, subDays } from 'date-fns';
 import { printTicket } from '../utils/print';
@@ -17,6 +17,11 @@ export default function Financial() {
   const [lastResetDate, setLastResetDate] = useState<string | null>(null);
   const [resetPeriod, setResetPeriod] = useState<'30days' | 'lastReset'>('30days');
 
+  // Invoice Settings
+  const [invoiceEnabled, setInvoiceEnabled] = useState(false);
+  const [invoiceNumber, setInvoiceNumber] = useState(1);
+  const [savingInvoice, setSavingInvoice] = useState(false);
+
   useEffect(() => {
     const fetchLastReset = async () => {
       const docRef = doc(db, 'settings', 'financial');
@@ -25,24 +30,50 @@ export default function Financial() {
         setLastResetDate(docSnap.data().lastResetDate);
       }
     };
+    
+    const fetchInvoiceSettings = async () => {
+      const docRef = doc(db, 'settings', 'invoice');
+      const docSnap = await getDoc(docRef);
+      if (docSnap.exists()) {
+        setInvoiceEnabled(docSnap.data().enabled || false);
+        setInvoiceNumber(docSnap.data().currentNumber || 1);
+      }
+    };
+
     fetchLastReset();
+    fetchInvoiceSettings();
   }, []);
+
+  const handleSaveInvoiceSettings = async () => {
+    playClick();
+    setSavingInvoice(true);
+    try {
+      await setDoc(doc(db, 'settings', 'invoice'), {
+        enabled: invoiceEnabled,
+        currentNumber: Number(invoiceNumber)
+      }, { merge: true });
+      playSuccess();
+      alert('Configuración de facturación guardada.');
+    } catch (e) {
+      playError();
+      console.error(e);
+      alert('Error al guardar configuración.');
+    }
+    setSavingInvoice(false);
+  };
 
   const handleGenerateBalance = async () => {
     playClick();
     if (!startDate || !endDate) {
       playError();
-      alert('Por favor seleccione ambas fechas.');
+      alert('Por favor seleccione ambas fechas y horas.');
       return;
     }
 
     setLoading(true);
     try {
-      // Ajustar fechas para incluir todo el día
       const start = new Date(startDate);
-      start.setHours(0, 0, 0, 0);
       const end = new Date(endDate);
-      end.setHours(23, 59, 59, 999);
 
       const ticketsQ = query(
         collection(db, 'tickets'),
@@ -78,15 +109,15 @@ export default function Financial() {
             <head>
               <title>Balance Financiero</title>
               <style>
-                @page { margin: 0; size: 80mm auto; }
-                body { font-family: monospace; width: 80mm; margin: 0 auto; padding: 5mm; box-sizing: border-box; font-size: 12px; }
+                @page { margin: 0; size: 58mm auto; }
+                body { font-family: monospace; width: 100%; margin: 0 auto; padding: 2mm; box-sizing: border-box; font-size: 10px; }
                 .text-center { text-align: center; }
                 .font-bold { font-weight: bold; }
-                .text-2xl { font-size: 1.5rem; }
-                .mb-4 { margin-bottom: 1rem; }
-                .flex-between { display: flex; justify-content: space-between; margin-bottom: 5px; }
-                .border-t { border-top: 1px dashed #000; padding-top: 10px; margin-top: 10px; }
-                .border-b { border-bottom: 1px dashed #000; padding-bottom: 10px; margin-bottom: 10px; }
+                .text-2xl { font-size: 1.2rem; }
+                .mb-4 { margin-bottom: 0.5rem; }
+                .flex-between { display: flex; justify-content: space-between; margin-bottom: 3px; }
+                .border-t { border-top: 1px dashed #000; padding-top: 5px; margin-top: 5px; }
+                .border-b { border-bottom: 1px dashed #000; padding-bottom: 5px; margin-bottom: 5px; }
               </style>
             </head>
             <body>
@@ -94,6 +125,7 @@ export default function Financial() {
                 <div class="text-2xl">🔱</div>
                 <h1 class="font-bold">POSEIDÓN</h1>
                 <p>Motel</p>
+                <p>NIT: 1095823098-1</p>
                 <p>Km 1 Vía Santa Rosa-Simití</p>
                 <p>Cel: 3157170874</p>
                 <p>motelposeidonsantarosa@gmail.com</p>
@@ -103,8 +135,8 @@ export default function Financial() {
               </div>
               
               <div class="border-b">
-                <p><strong>Desde:</strong> ${format(start, 'dd/MM/yyyy')}</p>
-                <p><strong>Hasta:</strong> ${format(end, 'dd/MM/yyyy')}</p>
+                <p><strong>Desde:</strong> ${format(start, 'dd/MM/yyyy HH:mm')}</p>
+                <p><strong>Hasta:</strong> ${format(end, 'dd/MM/yyyy HH:mm')}</p>
                 <p><strong>Generado:</strong> ${format(new Date(), 'dd/MM/yyyy HH:mm')}</p>
               </div>
 
@@ -329,18 +361,18 @@ export default function Financial() {
 
           <div className="space-y-6 mb-8">
             <div>
-              <label className="block text-sm font-black text-slate-700 mb-2 uppercase tracking-widest">Fecha Inicio</label>
+              <label className="block text-sm font-black text-slate-700 mb-2 uppercase tracking-widest">Fecha y Hora Inicio</label>
               <input
-                type="date"
+                type="datetime-local"
                 value={startDate}
                 onChange={(e) => setStartDate(e.target.value)}
                 className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none font-bold text-slate-700"
               />
             </div>
             <div>
-              <label className="block text-sm font-black text-slate-700 mb-2 uppercase tracking-widest">Fecha Fin</label>
+              <label className="block text-sm font-black text-slate-700 mb-2 uppercase tracking-widest">Fecha y Hora Fin</label>
               <input
-                type="date"
+                type="datetime-local"
                 value={endDate}
                 onChange={(e) => setEndDate(e.target.value)}
                 className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none font-bold text-slate-700"
@@ -374,6 +406,44 @@ export default function Financial() {
             {loading ? 'Procesando...' : 'Poner en Cero'}
           </button>
         </div>
+      </div>
+
+      <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-200 mt-8">
+        <h2 className="text-2xl font-black text-slate-800 mb-6 flex items-center gap-3 uppercase tracking-tight">
+          <FileText size={28} className="text-blue-600" />
+          Agregar Consecutivos de Facturas
+        </h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+          <div className="flex items-center gap-4 p-4 bg-slate-50 border border-slate-200 rounded-2xl">
+            <input 
+              type="checkbox" 
+              id="invoiceEnabled"
+              checked={invoiceEnabled}
+              onChange={(e) => setInvoiceEnabled(e.target.checked)}
+              className="w-6 h-6 rounded text-blue-600 focus:ring-blue-500"
+            />
+            <label htmlFor="invoiceEnabled" className="font-bold text-slate-700 cursor-pointer uppercase tracking-widest">
+              Activar Numeración Consecutiva
+            </label>
+          </div>
+          <div>
+            <label className="block text-sm font-black text-slate-700 mb-2 uppercase tracking-widest">Número Inicial / Actual</label>
+            <input
+              type="number"
+              value={invoiceNumber}
+              onChange={(e) => setInvoiceNumber(parseInt(e.target.value) || 0)}
+              className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none font-bold text-slate-700 text-xl"
+            />
+          </div>
+        </div>
+        <button
+          onClick={handleSaveInvoiceSettings}
+          disabled={savingInvoice}
+          className="w-full md:w-auto px-8 py-4 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white font-black rounded-2xl text-lg shadow-lg shadow-blue-100 transition-all active:scale-95 flex items-center justify-center gap-3 uppercase tracking-widest"
+        >
+          <Save size={24} />
+          {savingInvoice ? 'Guardando...' : 'Guardar Configuración'}
+        </button>
       </div>
 
       {/* Reset Confirmation Modal */}

@@ -32,7 +32,7 @@ export const PrintPreview = () => {
       iframe.style.position = 'absolute';
       iframe.style.left = '-9999px';
       iframe.style.top = '-9999px';
-      iframe.style.width = '302px'; // Exactly 80mm at 96 DPI to prevent mobile scaling issues
+      iframe.style.width = '170px'; // Approx 45mm printable area at 96 DPI to ensure no right side cutoff
       iframe.style.height = '2000px'; // Large enough to avoid scrolling
       document.body.appendChild(iframe);
       
@@ -44,7 +44,7 @@ export const PrintPreview = () => {
       
       doc.open();
       // Inject viewport meta tag to prevent mobile browsers from inflating text size
-      const modifiedHtml = html.replace('<head>', '<head><meta name="viewport" content="width=302, initial-scale=1.0, maximum-scale=1.0, user-scalable=0">');
+      const modifiedHtml = html.replace('<head>', '<head><meta name="viewport" content="width=170, initial-scale=1.0, maximum-scale=1.0, user-scalable=0">');
       doc.write(modifiedHtml);
       doc.close();
       
@@ -66,16 +66,17 @@ export const PrintPreview = () => {
       document.body.removeChild(iframe);
       
       const imgData = canvas.toDataURL('image/png');
-      const pdfWidth = 80; // 80mm thermal paper
+      const pdfWidth = 46; // 46mm printable area on 58mm thermal paper
       const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
       
       const pdf = new jsPDF({
         orientation: 'portrait',
         unit: 'mm',
-        format: [pdfWidth, pdfHeight]
+        format: [58, pdfHeight > 58 ? pdfHeight + 10 : 58] // 58mm paper width, dynamic height
       });
       
-      pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+      // Shift slightly to the left (2mm margin) to guarantee right side doesn't cut off
+      pdf.addImage(imgData, 'PNG', 2, 0, pdfWidth, pdfHeight);
       return pdf.output('blob');
     } catch (error) {
       console.error('Error generating PDF:', error);
@@ -198,29 +199,41 @@ export const PrintPreview = () => {
         
         <div className="p-4 sm:p-6 bg-white border-t border-slate-200 grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-4">
           <button
-            onClick={() => setIsOpen(false)}
-            className="px-2 sm:px-4 py-3 sm:py-4 bg-slate-100 hover:bg-slate-200 text-slate-600 font-black rounded-xl sm:rounded-2xl uppercase tracking-widest transition-all text-xs sm:text-sm"
+            onClick={() => {
+              if ('vibrate' in navigator) navigator.vibrate(10);
+              setIsOpen(false);
+            }}
+            className="px-2 sm:px-4 py-3 sm:py-4 bg-red-600 hover:bg-red-700 text-white font-black rounded-xl sm:rounded-2xl uppercase tracking-widest transition-all text-xs sm:text-sm active:scale-95 shadow-lg shadow-red-200"
           >
             Cerrar
           </button>
           <button
-            onClick={handleSave}
+            onClick={() => {
+              if ('vibrate' in navigator) navigator.vibrate(10);
+              handleSave();
+            }}
             disabled={isProcessing}
-            className="px-2 sm:px-4 py-3 sm:py-4 bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white font-black rounded-xl sm:rounded-2xl uppercase tracking-widest transition-all shadow-lg shadow-amber-100 flex items-center justify-center gap-1 sm:gap-2 text-xs sm:text-sm"
+            className="px-2 sm:px-4 py-3 sm:py-4 bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white font-black rounded-xl sm:rounded-2xl uppercase tracking-widest transition-all shadow-lg shadow-amber-100 flex items-center justify-center gap-1 sm:gap-2 text-xs sm:text-sm active:scale-95"
           >
             <Download size={18} /> <span className="hidden sm:inline">{isProcessing ? '...' : 'Guardar'}</span><span className="sm:hidden">Guardar</span>
           </button>
           <button
-            onClick={handleShare}
+            onClick={() => {
+              if ('vibrate' in navigator) navigator.vibrate(10);
+              handleShare();
+            }}
             disabled={isProcessing}
-            className="px-2 sm:px-4 py-3 sm:py-4 bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white font-black rounded-xl sm:rounded-2xl uppercase tracking-widest transition-all shadow-lg shadow-green-100 flex items-center justify-center gap-1 sm:gap-2 text-xs sm:text-sm"
+            className="px-2 sm:px-4 py-3 sm:py-4 bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white font-black rounded-xl sm:rounded-2xl uppercase tracking-widest transition-all shadow-lg shadow-green-100 flex items-center justify-center gap-1 sm:gap-2 text-xs sm:text-sm active:scale-95"
           >
             <Share2 size={18} /> <span className="hidden sm:inline">{isProcessing ? '...' : 'Compartir'}</span><span className="sm:hidden">Comp.</span>
           </button>
           <button
-            onClick={handlePrint}
+            onClick={() => {
+              if ('vibrate' in navigator) navigator.vibrate(10);
+              handlePrint();
+            }}
             disabled={isProcessing}
-            className="px-2 sm:px-4 py-3 sm:py-4 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-black rounded-xl sm:rounded-2xl uppercase tracking-widest transition-all shadow-lg shadow-blue-100 flex items-center justify-center gap-1 sm:gap-2 text-xs sm:text-sm"
+            className="px-2 sm:px-4 py-3 sm:py-4 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-black rounded-xl sm:rounded-2xl uppercase tracking-widest transition-all shadow-lg shadow-blue-100 flex items-center justify-center gap-1 sm:gap-2 text-xs sm:text-sm active:scale-95"
           >
             <Printer size={18} /> <span className="hidden sm:inline">{isProcessing ? '...' : 'Imprimir'}</span><span className="sm:hidden">Impr.</span>
           </button>

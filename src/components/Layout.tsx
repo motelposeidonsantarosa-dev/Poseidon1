@@ -168,8 +168,8 @@ export default function Layout() {
             <head>
               <title>Resumen de Turno</title>
               <style>
-                @page { margin: 0; size: 80mm auto; }
-                body { font-family: monospace; width: 80mm; margin: 0 auto; padding: 5mm; box-sizing: border-box; font-size: 12px; }
+                @page { margin: 0; size: 58mm auto; }
+                body { font-family: monospace; width: 100%; margin: 0 auto; padding: 2mm; box-sizing: border-box; font-size: 10px; }
                 .text-center { text-align: center; }
                 .font-bold { font-weight: bold; }
                 .text-2xl { font-size: 1.5rem; }
@@ -183,6 +183,7 @@ export default function Layout() {
                 <div class="text-2xl">🔱</div>
                 <h1 class="font-bold">POSEIDÓN</h1>
                 <p>Motel</p>
+                <p>NIT: 1095823098-1</p>
                 <p>Km 1 Vía Santa Rosa-Simití</p>
                 <p>Cel: 3157170874</p>
                 <p>motelposeidonsantarosa@gmail.com</p>
@@ -234,9 +235,12 @@ export default function Layout() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col lg:flex-row pb-20 lg:pb-0">
+    <div className="min-h-screen bg-gray-50 flex flex-col lg:flex-row pb-20 lg:pb-0 [@media(max-height:600px)_and_(max-width:960px)_and_(orientation:landscape)]:pb-0 [@media(max-height:600px)_and_(max-width:960px)_and_(orientation:landscape)]:pl-20">
       {/* Mobile/Tablet Header (Logo Only) */}
-      <div className="lg:hidden bg-slate-900 text-white p-4 flex justify-center items-center sticky top-0 z-40 shadow-md">
+      <div 
+        className="lg:hidden [@media(max-height:600px)_and_(max-width:960px)_and_(orientation:landscape)]:hidden bg-slate-900 text-white px-4 pb-4 flex justify-center items-center sticky top-0 z-40 shadow-md"
+        style={{ paddingTop: 'max(1rem, env(safe-area-inset-top))' }}
+      >
         <div className="flex items-center gap-2">
           <span className="text-2xl">🔱</span>
           <span className="font-black tracking-tighter text-xl uppercase">Poseidón</span>
@@ -244,81 +248,95 @@ export default function Layout() {
       </div>
 
       {/* Sidebar (Desktop Only) */}
-      <aside className="hidden lg:flex bg-slate-900 text-white w-64 flex-col sticky top-0 h-screen">
-        <div className="p-6 flex items-center gap-3 border-b border-slate-800">
+      <aside className="hidden lg:flex bg-slate-900 text-white w-20 xl:w-64 flex-col sticky top-0 h-screen transition-all duration-300">
+        <div className="p-4 xl:p-6 flex items-center justify-center xl:justify-start gap-3 border-b border-slate-800">
           <span className="text-3xl">🔱</span>
-          <span className="font-black tracking-tighter text-2xl uppercase">Poseidón</span>
+          <span className="hidden xl:block font-black tracking-tighter text-2xl uppercase">Poseidón</span>
         </div>
         
-        <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
+        <nav className="flex-1 p-2 xl:p-4 space-y-2 overflow-y-auto">
           {navItems.map((item) => (
             <Link
               key={item.path}
               to={item.path}
               onClick={() => playClick()}
               className={cn(
-                "flex items-center gap-3 px-4 py-3.5 rounded-xl transition-all font-bold text-base",
+                "flex items-center justify-center xl:justify-start gap-3 p-3 xl:px-4 xl:py-3.5 rounded-xl transition-all font-bold text-base",
                 location.pathname === item.path
-                  ? "bg-blue-600 text-white shadow-lg shadow-blue-900/20"
+                  ? "text-amber-400 bg-slate-800/80 drop-shadow-[0_0_8px_rgba(251,191,36,0.5)]"
                   : "text-slate-400 hover:bg-slate-800 hover:text-white"
               )}
+              title={item.name}
             >
-              <item.icon size={20} />
-              {item.name}
+              <item.icon size={24} className="shrink-0" />
+              <span className="hidden xl:block">{item.name}</span>
             </Link>
           ))}
         </nav>
 
-        <div className="p-4 border-t border-slate-800 space-y-4">
-          <div className="px-4 py-3 bg-slate-800/50 rounded-xl">
-            <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Usuario</div>
-            <div className="font-black text-blue-400 truncate">{appUser?.name}</div>
-            <div className="text-xs text-slate-500 capitalize">{appUser?.role}</div>
+        <div className="p-2 xl:p-4 border-t border-slate-800 space-y-2 xl:space-y-4">
+          <div className="p-2 xl:px-4 xl:py-3 bg-slate-800/50 rounded-xl flex flex-col items-center xl:items-start">
+            <div className="hidden xl:block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Usuario</div>
+            <div className="hidden xl:block font-black text-blue-400 truncate w-full">{appUser?.name}</div>
+            <div className="hidden xl:block text-xs text-slate-500 capitalize">{appUser?.role}</div>
+            
+            {/* Minimal user info for lg */}
+            <div className="xl:hidden w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center font-black text-white" title={appUser?.name}>
+              {appUser?.name?.charAt(0).toUpperCase()}
+            </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-2">
+          <div className="flex flex-col xl:grid xl:grid-cols-2 gap-2">
             <button
               onClick={handleChangeMyPin}
               className="flex flex-col items-center justify-center gap-1 p-3 rounded-xl bg-slate-800 hover:bg-slate-700 transition-colors text-slate-300"
+              title="Cambiar Clave"
             >
               <KeyRound size={20} />
-              <span className="text-[10px] font-bold uppercase">Clave</span>
+              <span className="hidden xl:block text-[10px] font-bold uppercase">Clave</span>
             </button>
             <button
               onClick={handleLogout}
               className="flex flex-col items-center justify-center gap-1 p-3 rounded-xl bg-red-900/20 hover:bg-red-900/40 transition-colors text-red-400"
+              title="Cerrar Sesión"
             >
               <LogOut size={20} />
-              <span className="text-[10px] font-bold uppercase">Salir</span>
+              <span className="hidden xl:block text-[10px] font-bold uppercase">Salir</span>
             </button>
           </div>
         </div>
       </aside>
 
-      {/* Bottom Navigation (Mobile/Tablet Only) */}
-      <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-slate-900 text-white z-50 flex items-center justify-start overflow-x-auto p-2 border-t border-slate-800 shadow-[0_-4px_10px_rgba(0,0,0,0.3)] scrollbar-hide">
-        {navItems.map((item) => (
-          <Link
-            key={item.path}
-            to={item.path}
-            onClick={() => playClick()}
-            className={cn(
-              "flex flex-col items-center gap-1 p-2 rounded-xl transition-all min-w-[80px]",
-              location.pathname === item.path
-                ? "text-blue-400"
-                : "text-slate-400"
-            )}
-          >
-            <item.icon size={24} />
-            <span className="text-[10px] font-black uppercase tracking-tighter">{item.name}</span>
-          </Link>
-        ))}
+      {/* Bottom Navigation (Mobile/Tablet Only) -> Left Sidebar on Mobile Landscape */}
+      <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-slate-900 text-white z-50 flex items-center justify-start overflow-x-auto overflow-y-hidden p-2 border-t border-slate-800 shadow-[0_-4px_10px_rgba(0,0,0,0.3)] scrollbar-hide [@media(max-height:600px)_and_(max-width:960px)_and_(orientation:landscape)]:top-0 [@media(max-height:600px)_and_(max-width:960px)_and_(orientation:landscape)]:bottom-0 [@media(max-height:600px)_and_(max-width:960px)_and_(orientation:landscape)]:right-auto [@media(max-height:600px)_and_(max-width:960px)_and_(orientation:landscape)]:w-20 [@media(max-height:600px)_and_(max-width:960px)_and_(orientation:landscape)]:flex-col [@media(max-height:600px)_and_(max-width:960px)_and_(orientation:landscape)]:overflow-y-auto [@media(max-height:600px)_and_(max-width:960px)_and_(orientation:landscape)]:overflow-x-hidden [@media(max-height:600px)_and_(max-width:960px)_and_(orientation:landscape)]:border-t-0 [@media(max-height:600px)_and_(max-width:960px)_and_(orientation:landscape)]:border-r [@media(max-height:600px)_and_(max-width:960px)_and_(orientation:landscape)]:justify-start [@media(max-height:600px)_and_(max-width:960px)_and_(orientation:landscape)]:pt-4 [@media(max-height:600px)_and_(max-width:960px)_and_(orientation:landscape)]:pb-4 [@media(max-height:600px)_and_(max-width:960px)_and_(orientation:landscape)]:gap-2">
+        {navItems.map((item) => {
+          const isActive = location.pathname === item.path;
+          return (
+            <Link
+              key={item.path}
+              to={item.path}
+              onClick={() => playClick()}
+              className={cn(
+                "flex flex-col items-center gap-1 p-2 rounded-xl transition-all shrink-0 min-w-[70px] sm:min-w-[90px] [@media(max-height:600px)_and_(max-width:960px)_and_(orientation:landscape)]:min-w-0 [@media(max-height:600px)_and_(max-width:960px)_and_(orientation:landscape)]:w-full",
+                isActive
+                  ? "text-amber-400 drop-shadow-[0_0_8px_rgba(251,191,36,0.5)]"
+                  : "text-slate-400 hover:text-slate-300"
+              )}
+            >
+              <item.icon 
+                size={24} 
+                className="shrink-0 transition-all" 
+              />
+              <span className="text-[10px] font-black uppercase tracking-tighter text-center leading-tight">{item.name}</span>
+            </Link>
+          );
+        })}
         <button
           onClick={handleLogout}
-          className="flex flex-col items-center gap-1 p-2 text-red-400 min-w-[80px]"
+          className="flex flex-col items-center gap-1 p-2 text-red-400 shrink-0 min-w-[70px] sm:min-w-[90px] [@media(max-height:600px)_and_(max-width:960px)_and_(orientation:landscape)]:min-w-0 [@media(max-height:600px)_and_(max-width:960px)_and_(orientation:landscape)]:w-full [@media(max-height:600px)_and_(max-width:960px)_and_(orientation:landscape)]:mt-auto"
         >
-          <LogOut size={24} />
-          <span className="text-[10px] font-black uppercase tracking-tighter">Salir</span>
+          <LogOut size={24} className="shrink-0" />
+          <span className="text-[10px] font-black uppercase tracking-tighter text-center leading-tight">Salir</span>
         </button>
       </nav>
 
@@ -333,7 +351,7 @@ export default function Layout() {
           <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-xl">
             <div className="flex justify-between items-center mb-6">
               <h3 className="text-xl font-bold text-slate-900">Cambiar Mi Clave</h3>
-              <button onClick={() => setIsChangingPin(false)} className="text-slate-400 hover:text-slate-600">
+              <button onClick={() => { playClick(); setIsChangingPin(false); }} className="text-slate-400 hover:text-slate-600">
                 <X size={24} />
               </button>
             </div>
@@ -354,7 +372,7 @@ export default function Layout() {
             
             <div className="flex justify-end gap-3 mt-6">
               <button
-                onClick={() => setIsChangingPin(false)}
+                onClick={() => { playClick(); setIsChangingPin(false); }}
                 className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg font-medium transition-colors"
               >
                 Cancelar
@@ -392,7 +410,7 @@ export default function Layout() {
                 {isEndingShift ? 'Cerrando Turno...' : 'Terminar Turno y Salir'}
               </button>
               <button 
-                onClick={() => setShowEndShiftModal(false)}
+                onClick={() => { playClick(); setShowEndShiftModal(false); }}
                 className="w-full py-3 text-slate-600 hover:bg-slate-100 rounded-xl font-bold transition-colors"
               >
                 Cancelar
