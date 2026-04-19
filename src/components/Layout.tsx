@@ -1,7 +1,7 @@
 import { Outlet, Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useFeedback } from '../hooks/useFeedback';
-import { Home, Package, Receipt, Users, LogOut, History, KeyRound, Calculator, X, StopCircle, Menu, CalendarCheck } from 'lucide-react';
+import { Home, Package, Receipt, Users, LogOut, History, KeyRound, Calculator, X, StopCircle, Menu, CalendarCheck, ShieldAlert } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useState, useEffect } from 'react';
 import { collection, onSnapshot, query, where, getDocs, updateDoc, doc } from 'firebase/firestore';
@@ -53,6 +53,7 @@ export default function Layout() {
     { name: 'Reservas', path: '/reservations', icon: CalendarCheck },
     { name: 'Gastos', path: '/expenses', icon: Receipt },
     { name: 'Historial', path: '/history', icon: History },
+    { name: 'Novedades', path: '/incidents', icon: ShieldAlert },
   ];
 
   if (appUser?.role === 'admin') {
@@ -308,7 +309,7 @@ export default function Layout() {
       </aside>
 
       {/* Bottom Navigation (Mobile/Tablet Only) -> Left Sidebar on Mobile Landscape */}
-      <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-slate-900 text-white z-50 flex items-center justify-start overflow-x-auto overflow-y-hidden p-2 border-t border-slate-800 shadow-[0_-4px_10px_rgba(0,0,0,0.3)] scrollbar-hide [@media(max-height:600px)_and_(max-width:960px)_and_(orientation:landscape)]:top-0 [@media(max-height:600px)_and_(max-width:960px)_and_(orientation:landscape)]:bottom-0 [@media(max-height:600px)_and_(max-width:960px)_and_(orientation:landscape)]:right-auto [@media(max-height:600px)_and_(max-width:960px)_and_(orientation:landscape)]:w-20 [@media(max-height:600px)_and_(max-width:960px)_and_(orientation:landscape)]:flex-col [@media(max-height:600px)_and_(max-width:960px)_and_(orientation:landscape)]:overflow-y-auto [@media(max-height:600px)_and_(max-width:960px)_and_(orientation:landscape)]:overflow-x-hidden [@media(max-height:600px)_and_(max-width:960px)_and_(orientation:landscape)]:border-t-0 [@media(max-height:600px)_and_(max-width:960px)_and_(orientation:landscape)]:border-r [@media(max-height:600px)_and_(max-width:960px)_and_(orientation:landscape)]:justify-start [@media(max-height:600px)_and_(max-width:960px)_and_(orientation:landscape)]:pt-4 [@media(max-height:600px)_and_(max-width:960px)_and_(orientation:landscape)]:pb-4 [@media(max-height:600px)_and_(max-width:960px)_and_(orientation:landscape)]:gap-2">
+      <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-slate-900 text-white z-50 flex items-center justify-start overflow-x-auto overflow-y-auto p-2 border-t border-slate-800 shadow-[0_-4px_10px_rgba(0,0,0,0.3)] [@media(max-height:600px)_and_(max-width:960px)_and_(orientation:landscape)]:top-0 [@media(max-height:600px)_and_(max-width:960px)_and_(orientation:landscape)]:bottom-0 [@media(max-height:600px)_and_(max-width:960px)_and_(orientation:landscape)]:right-auto [@media(max-height:600px)_and_(max-width:960px)_and_(orientation:landscape)]:w-20 [@media(max-height:600px)_and_(max-width:960px)_and_(orientation:landscape)]:flex-col [@media(max-height:600px)_and_(max-width:960px)_and_(orientation:landscape)]:overflow-y-auto [@media(max-height:600px)_and_(max-width:960px)_and_(orientation:landscape)]:overflow-x-hidden [@media(max-height:600px)_and_(max-width:960px)_and_(orientation:landscape)]:border-t-0 [@media(max-height:600px)_and_(max-width:960px)_and_(orientation:landscape)]:border-r [@media(max-height:600px)_and_(max-width:960px)_and_(orientation:landscape)]:justify-start [@media(max-height:600px)_and_(max-width:960px)_and_(orientation:landscape)]:pt-4 [@media(max-height:600px)_and_(max-width:960px)_and_(orientation:landscape)]:pb-4 [@media(max-height:600px)_and_(max-width:960px)_and_(orientation:landscape)]:gap-2">
         {navItems.map((item) => {
           const isActive = location.pathname === item.path;
           return (

@@ -11,21 +11,49 @@ import History from './pages/History';
 import Users from './pages/Users';
 import Financial from './pages/Financial';
 import Reservations from './pages/Reservations';
+import Incidents from './pages/Incidents';
 import { PrintPreview } from './components/PrintPreview';
 
 import { doc, getDocFromServer } from 'firebase/firestore';
 import { db } from './firebase';
+import { KeyRound, X } from 'lucide-react';
 
-async function testConnection() {
-  try {
-    await getDocFromServer(doc(db, 'test', 'connection'));
-  } catch (error) {
-    if (error instanceof Error && error.message.includes('the client is offline')) {
-      console.error("Please check your Firebase configuration. ");
+function ConnectionErrorBanner() {
+  const [error, setError] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    async function testConnection() {
+      try {
+        await getDocFromServer(doc(db, 'test', 'connection'));
+      } catch (err) {
+        if (err instanceof Error) {
+          const msg = err.message.toLowerCase();
+          if (msg.includes('offline') || msg.includes('reach') || msg.includes('unavailable') || msg.includes('failed')) {
+            setError("Error de conexión con Firestore. El sistema guardará los cambios localmente y se subirán al recuperar la red.");
+          }
+        }
+      }
     }
-  }
+    testConnection();
+  }, []);
+
+  if (!error) return null;
+
+  return (
+    <div className="fixed bottom-20 left-4 right-4 md:left-auto md:right-8 md:w-96 bg-red-600 text-white p-4 rounded-2xl shadow-2xl z-[1000] animate-in slide-in-from-bottom-10">
+      <div className="flex items-center gap-3">
+        <div className="text-2xl">⚠️</div>
+        <div className="flex-1">
+          <p className="font-black text-sm uppercase mb-1">Estado de Red</p>
+          <p className="text-[10px] font-bold opacity-90 leading-tight">{error}</p>
+        </div>
+        <button onClick={() => setError(null)} className="p-1 hover:bg-white/20 rounded-lg">
+          <X size={20} />
+        </button>
+      </div>
+    </div>
+  );
 }
-testConnection();
 
 function ProtectedRoute({ children, requireAdmin = false }: { children: React.ReactNode, requireAdmin?: boolean }) {
   const { appUser } = useAuth();
@@ -56,6 +84,7 @@ function AppRoutes() {
         <Route path="expenses" element={<Expenses />} />
         <Route path="history" element={<History />} />
         <Route path="reservations" element={<Reservations />} />
+        <Route path="incidents" element={<Incidents />} />
         <Route path="users" element={<ProtectedRoute requireAdmin><Users /></ProtectedRoute>} />
         <Route path="financial" element={<ProtectedRoute requireAdmin><Financial /></ProtectedRoute>} />
       </Route>
@@ -69,6 +98,7 @@ export default function App() {
       <BrowserRouter>
         <AppRoutes />
         <PrintPreview />
+        <ConnectionErrorBanner />
       </BrowserRouter>
     </AuthProvider>
   );

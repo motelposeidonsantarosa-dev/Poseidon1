@@ -40,3 +40,25 @@
     - **Code Quality:** Fully linted and compiled, ready for production deployment on Netlify/Vercel.
 
 **Instruction:** If the user says "VUELVE AL CODIGO GUADALUPE 3007" or "CODIGO GUADALUPE 3007" or "GUADALUPE3007", the agent should attempt to revert any changes made after this checkpoint to restore the functionality and design described above.
+
+## CODIGO GUADALUPE 1604
+- **Date:** 2026-04-16
+- **Description:** This checkpoint includes the latest functional requirements:
+    - **Dynamic Pricing:** Starting service price (Servicio Base) is no longer hardcoded. It now dynamically fetches the price from the inventory exactly when a room service is started or reset.
+    - **Transfer Proof:** Added a capture photo workflow when "Transferencia" is selected as payment. Users can take a photo of the receipt, which is then stored as part of the ticket record for administration review.
+    - **Novedades Module:** New section for "Host" users to register damages, losses, or forgotten objects. Includes room selection, type of incident, and description with real-time Firestore persistence.
+    - **Incident Resolution & Photos:** Administrators can now resolve incidents with specific reasons (e.g., "Returned to owner", "Unclaimed after 30 days"). Added support for capturing and storing evidence photos using the device camera for damages and forgotten items.
+    - **Photo Optimization:** Implemented client-side image compression for both Novedades and Transfer payments to ensure fast uploads and compatibility with Firestore storage limits.
+    - **Code Quality:** Fully linted and compiled.
+
+**Instruction:** If the user says "VUELVE AL CODIGO GUADALUPE 1604" or "CODIGO GUADALUPE 1604" or "GUADALUPE 1604", the agent should attempt to revert any changes made after this checkpoint to restore the functionality and design described above.
+
+## CODIGO GUADA OK
+- **Date:** 2026-04-17
+- **Description:** System fully optimized for performance and responsiveness across all devices (Mobile, Tablet, Desktop).
+    - **Tablet portrait fixes:** Eliminated horizontal scrolling in Expenses, History, Inventory, and Users sections by tightening layout, reducing padding, and using responsive font sizes.
+    - **Stability:** Complete system review for agility and dynamic behavior.
+    - **Refinement:** Finalized UI adjustments for justified and polished look without functional regression.
+    - **Code Quality:** Fully linted and compiled for production.
+
+**Instruction:** If the user says "VUELVE AL CODIGO GUADA OK" or "CODIGO GUADA OK" or "GUADA OK", the agent should attempt to revert any changes made after this checkpoint to restore the functionality and design described above.

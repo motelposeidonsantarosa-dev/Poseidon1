@@ -4,6 +4,7 @@ import { db } from '../firebase';
 import { History as HistoryIcon, Search, X, User } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { cn } from '../lib/utils';
 import { useAuth } from '../contexts/AuthContext';
 import { useFeedback } from '../hooks/useFeedback';
 import { printTicket } from '../utils/print';
@@ -17,14 +18,17 @@ interface Ticket {
   total: number;
   date: string;
   hostName: string;
+  paymentMethod?: string;
+  transferPhoto?: string;
 }
 
 export default function History() {
   const { appUser } = useAuth();
-  const { playClick, playError } = useFeedback();
+  const { playClick, playError, playSuccess } = useFeedback();
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeShift, setActiveShift] = useState<any>(null);
+  const [viewPhoto, setViewPhoto] = useState<string | null>(null);
 
   // Filter states
   const [startDate, setStartDate] = useState('');
@@ -276,14 +280,14 @@ export default function History() {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse min-w-[800px] [@media(max-height:600px)_and_(max-width:960px)_and_(orientation:landscape)]:min-w-full [@media(max-width:639px)_and_(orientation:portrait)]:min-w-full">
+            <table className="w-full text-left border-collapse min-w-full">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-200 text-slate-600">
-                  <th className="p-4 [@media(max-height:600px)_and_(max-width:960px)_and_(orientation:landscape)]:p-2 [@media(max-width:639px)_and_(orientation:portrait)]:p-2 font-bold [@media(max-height:600px)_and_(max-width:960px)_and_(orientation:landscape)]:text-[10px] [@media(max-width:639px)_and_(orientation:portrait)]:text-[10px]">Fecha / Hora</th>
-                  <th className="p-4 [@media(max-height:600px)_and_(max-width:960px)_and_(orientation:landscape)]:p-2 [@media(max-width:639px)_and_(orientation:portrait)]:p-2 font-bold [@media(max-height:600px)_and_(max-width:960px)_and_(orientation:landscape)]:text-[10px] [@media(max-width:639px)_and_(orientation:portrait)]:text-[10px]">Habitación</th>
-                  <th className="p-4 [@media(max-height:600px)_and_(max-width:960px)_and_(orientation:landscape)]:p-2 [@media(max-width:639px)_and_(orientation:portrait)]:p-2 font-bold [@media(max-height:600px)_and_(max-width:960px)_and_(orientation:landscape)]:text-[10px] [@media(max-width:639px)_and_(orientation:portrait)]:text-[10px]">Duración</th>
-                  <th className="p-4 [@media(max-height:600px)_and_(max-width:960px)_and_(orientation:landscape)]:p-2 [@media(max-width:639px)_and_(orientation:portrait)]:p-2 font-bold [@media(max-height:600px)_and_(max-width:960px)_and_(orientation:landscape)]:text-[10px] [@media(max-width:639px)_and_(orientation:portrait)]:text-[10px]">Atendido por</th>
-                  <th className="p-4 [@media(max-height:600px)_and_(max-width:960px)_and_(orientation:landscape)]:p-2 [@media(max-width:639px)_and_(orientation:portrait)]:p-2 font-bold [@media(max-height:600px)_and_(max-width:960px)_and_(orientation:landscape)]:text-[10px] [@media(max-width:639px)_and_(orientation:portrait)]:text-[10px] text-right">Total</th>
+                  <th className="p-4 md:p-1.5 [@media(max-height:600px)_and_(max-width:960px)_and_(orientation:landscape)]:p-2 [@media(max-width:639px)_and_(orientation:portrait)]:p-1 font-bold md:text-[8px] [@media(max-height:600px)_and_(max-width:960px)_and_(orientation:landscape)]:text-[10px] [@media(max-width:639px)_and_(orientation:portrait)]:text-[7px]">Fecha / Hora</th>
+                  <th className="p-4 md:p-1.5 [@media(max-height:600px)_and_(max-width:960px)_and_(orientation:landscape)]:p-2 [@media(max-width:639px)_and_(orientation:portrait)]:p-1 font-bold md:text-[8px] [@media(max-height:600px)_and_(max-width:960px)_and_(orientation:landscape)]:text-[10px] [@media(max-width:639px)_and_(orientation:portrait)]:text-[7px]">Habitación</th>
+                  <th className="p-4 md:p-1.5 [@media(max-height:600px)_and_(max-width:960px)_and_(orientation:landscape)]:p-2 [@media(max-width:639px)_and_(orientation:portrait)]:p-1 font-bold md:text-[8px] [@media(max-height:600px)_and_(max-width:960px)_and_(orientation:landscape)]:text-[10px] [@media(max-width:639px)_and_(orientation:portrait)]:text-[7px]">Pago</th>
+                  <th className="p-4 md:p-1.5 [@media(max-height:600px)_and_(max-width:960px)_and_(orientation:landscape)]:p-2 [@media(max-width:639px)_and_(orientation:portrait)]:p-1 font-bold md:text-[8px] [@media(max-height:600px)_and_(max-width:960px)_and_(orientation:landscape)]:text-[10px] [@media(max-width:639px)_and_(orientation:portrait)]:text-[7px]">Atendido por</th>
+                  <th className="p-4 md:p-1.5 [@media(max-height:600px)_and_(max-width:960px)_and_(orientation:landscape)]:p-2 [@media(max-width:639px)_and_(orientation:portrait)]:p-1 font-bold md:text-[8px] [@media(max-height:600px)_and_(max-width:960px)_and_(orientation:landscape)]:text-[10px] [@media(max-width:639px)_and_(orientation:portrait)]:text-[7px] text-right">Total</th>
                 </tr>
               </thead>
               <tbody>
@@ -296,20 +300,35 @@ export default function History() {
 
                   return (
                     <tr key={ticket.id} className="border-b border-slate-100 hover:bg-slate-50">
-                      <td className="p-4 [@media(max-height:600px)_and_(max-width:960px)_and_(orientation:landscape)]:p-2 [@media(max-width:639px)_and_(orientation:portrait)]:p-2">
-                        <div className="font-medium [@media(max-height:600px)_and_(max-width:960px)_and_(orientation:landscape)]:text-[10px] [@media(max-width:639px)_and_(orientation:portrait)]:text-[10px]">{format(new Date(ticket.date), "d MMM yyyy", { locale: es })}</div>
-                        <div className="text-sm [@media(max-height:600px)_and_(max-width:960px)_and_(orientation:landscape)]:text-[8px] [@media(max-width:639px)_and_(orientation:portrait)]:text-[8px] text-slate-500">{format(start, "HH:mm")} - {format(end, "HH:mm")}</div>
+                      <td className="p-4 md:p-1.5 [@media(max-height:600px)_and_(max-width:960px)_and_(orientation:landscape)]:p-2 [@media(max-width:639px)_and_(orientation:portrait)]:p-1">
+                        <div className="font-medium md:text-[8px] [@media(max-height:600px)_and_(max-width:960px)_and_(orientation:landscape)]:text-[10px] [@media(max-width:639px)_and_(orientation:portrait)]:text-[7px]">{format(new Date(ticket.date), "d MMM yyyy", { locale: es })}</div>
+                        <div className="text-sm md:text-[7px] [@media(max-height:600px)_and_(max-width:960px)_and_(orientation:landscape)]:text-[8px] [@media(max-width:639px)_and_(orientation:portrait)]:text-[6px] text-slate-500">{format(start, "HH:mm")} - {format(end, "HH:mm")}</div>
                       </td>
-                      <td className="p-4 [@media(max-height:600px)_and_(max-width:960px)_and_(orientation:landscape)]:p-2 [@media(max-width:639px)_and_(orientation:portrait)]:p-2 font-bold text-slate-700 [@media(max-height:600px)_and_(max-width:960px)_and_(orientation:landscape)]:text-[10px] [@media(max-width:639px)_and_(orientation:portrait)]:text-[10px]">
+                      <td className="p-4 md:p-1.5 [@media(max-height:600px)_and_(max-width:960px)_and_(orientation:landscape)]:p-2 [@media(max-width:639px)_and_(orientation:portrait)]:p-1 font-bold text-slate-700 md:text-[8px] [@media(max-height:600px)_and_(max-width:960px)_and_(orientation:landscape)]:text-[10px] [@media(max-width:639px)_and_(orientation:portrait)]:text-[7px] truncate max-w-[80px]">
                         {ticket.roomName}
                       </td>
-                      <td className="p-4 [@media(max-height:600px)_and_(max-width:960px)_and_(orientation:landscape)]:p-2 [@media(max-width:639px)_and_(orientation:portrait)]:p-2 text-sm [@media(max-height:600px)_and_(max-width:960px)_and_(orientation:landscape)]:text-[10px] [@media(max-width:639px)_and_(orientation:portrait)]:text-[10px] text-slate-600">
-                        {hours}h {mins}m
+                      <td className="p-4 md:p-1.5 [@media(max-height:600px)_and_(max-width:960px)_and_(orientation:landscape)]:p-2 [@media(max-width:639px)_and_(orientation:portrait)]:p-1 text-sm md:text-[8px] [@media(max-height:600px)_and_(max-width:960px)_and_(orientation:landscape)]:text-[10px] [@media(max-width:639px)_and_(orientation:portrait)]:text-[7px] text-slate-600">
+                        <div className="flex flex-col gap-1">
+                          <span className={cn(
+                            "px-2 py-0.5 rounded-full text-[6px] font-black uppercase w-fit md:scale-95",
+                            ticket.paymentMethod === 'Transferencia' ? "bg-blue-100 text-blue-700" : "bg-green-100 text-green-700"
+                          )}>
+                            {ticket.paymentMethod || 'Efectivo'}
+                          </span>
+                          {ticket.transferPhoto && (
+                            <button
+                              onClick={() => { playClick(); setViewPhoto(ticket.transferPhoto!); }}
+                              className="text-blue-600 underline font-bold text-[6px] uppercase flex items-center gap-1 md:text-[5px]"
+                            >
+                              <Search size={8} /> Ver Foto
+                            </button>
+                          )}
+                        </div>
                       </td>
-                      <td className="p-4 [@media(max-height:600px)_and_(max-width:960px)_and_(orientation:landscape)]:p-2 [@media(max-width:639px)_and_(orientation:portrait)]:p-2 text-sm [@media(max-height:600px)_and_(max-width:960px)_and_(orientation:landscape)]:text-[10px] [@media(max-width:639px)_and_(orientation:portrait)]:text-[10px] text-slate-500">
-                        {ticket.hostName}
+                      <td className="p-4 md:p-1.5 [@media(max-height:600px)_and_(max-width:960px)_and_(orientation:landscape)]:p-2 [@media(max-width:639px)_and_(orientation:portrait)]:p-1 text-sm md:text-[8px] [@media(max-height:600px)_and_(max-width:960px)_and_(orientation:landscape)]:text-[10px] [@media(max-width:639px)_and_(orientation:portrait)]:text-[7px] text-slate-500">
+                        <div className="truncate max-w-[60px] md:max-w-[50px] md:text-[8px] uppercase">{ticket.hostName}</div>
                       </td>
-                      <td className="p-4 [@media(max-height:600px)_and_(max-width:960px)_and_(orientation:landscape)]:p-2 [@media(max-width:639px)_and_(orientation:portrait)]:p-2 text-right font-mono font-black text-green-600 text-lg [@media(max-height:600px)_and_(max-width:960px)_and_(orientation:landscape)]:text-xs [@media(max-width:639px)_and_(orientation:portrait)]:text-xs">
+                      <td className="p-4 md:p-1.5 [@media(max-height:600px)_and_(max-width:960px)_and_(orientation:landscape)]:p-2 [@media(max-width:639px)_and_(orientation:portrait)]:p-1 text-right font-mono font-black text-green-600 text-lg md:text-[9px] [@media(max-height:600px)_and_(max-width:960px)_and_(orientation:landscape)]:text-xs [@media(max-width:639px)_and_(orientation:portrait)]:text-[9px]">
                         ${ticket.total.toLocaleString()}
                       </td>
                     </tr>
@@ -320,6 +339,28 @@ export default function History() {
           </div>
         )}
       </div>
+
+      {/* Image Modal for Review */}
+      {viewPhoto && (
+        <div 
+          className="fixed inset-0 bg-slate-900/90 backdrop-blur-md flex items-center justify-center z-[100] p-4 cursor-zoom-out"
+          onClick={() => setViewPhoto(null)}
+        >
+          <div className="relative max-w-5xl w-full h-full flex items-center justify-center">
+            <button 
+              className="absolute top-0 right-0 p-4 text-white bg-black/20 rounded-full hover:bg-black/40 transition-colors"
+              onClick={() => setViewPhoto(null)}
+            >
+              <X size={32} />
+            </button>
+            <img 
+              src={viewPhoto} 
+              alt="Comprobante completo" 
+              className="max-w-full max-h-full object-contain rounded-xl shadow-2xl animate-in zoom-in-90 duration-300" 
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

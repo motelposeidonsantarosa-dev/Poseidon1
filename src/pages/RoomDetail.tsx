@@ -1,10 +1,10 @@
-import { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { doc, onSnapshot, updateDoc, collection, getDocs, addDoc, runTransaction, query, where, orderBy, getDoc, increment } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useAuth } from '../contexts/AuthContext';
 import { useFeedback } from '../hooks/useFeedback';
-import { ArrowLeft, Plus, Minus, Printer, Trash2, Clock, Users, Coffee, CheckCircle, Heart, Package, X, Wine, CalendarCheck, AlertCircle } from 'lucide-react';
+import { ArrowLeft, Plus, Minus, Printer, Trash2, Clock, Users, Coffee, CheckCircle, Heart, Package, X, Wine, CalendarCheck, AlertCircle, RotateCcw } from 'lucide-react';
 
 const PRODUCT_COLORS = [
   "bg-red-100 text-red-700 hover:bg-red-200",
@@ -23,8 +23,9 @@ const PRODUCT_COLORS = [
   "bg-rose-100 text-rose-700 hover:bg-rose-200"
 ];
 import { cn } from '../lib/utils';
-import { format, parseISO, isBefore, addHours } from 'date-fns';
+import { format, parseISO, isBefore, addHours, isAfter, subHours } from 'date-fns';
 import { printTicket } from '../utils/print';
+import { compressImage } from '../utils/image';
 
 interface ProductItem {
   id: string;
@@ -43,8 +44,10 @@ interface Room {
   services: ProductItem[];
   products: ProductItem[];
   total: number;
+  basePrice?: number;
   currentHostId: string | null;
   currentHostName: string | null;
+  reservationAbono?: number;
 }
 
 interface InventoryProduct {
@@ -55,7 +58,7 @@ interface InventoryProduct {
   category: string;
 }
 
-const BASE_PRICE = 70000;
+const BASE_PRICE = 60000;
 const EXTRA_HOUR_PRICE = 20000;
 const EXTRA_PERSON_PRICE = 20000;
 const SERVICE_PRICE = 20000;
@@ -70,8 +73,13 @@ export default function RoomDetail() {
   const [inventory, setInventory] = useState<InventoryProduct[]>([]);
   const [now, setNow] = useState(new Date());
   const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [showReservationWarning, setShowReservationWarning] = useState<any>(null);
   const [activeShift, setActiveShift] = useState<any>(null);
   const [showNoShiftModal, setShowNoShiftModal] = useState(false);
+  const [transferPhoto, setTransferPhoto] = useState<string | null>(null);
+  const [isCapturingPhoto, setIsCapturingPhoto] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const printRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -114,7 +122,10 @@ export default function RoomDetail() {
 
   useEffect(() => {
     const unsubscribe = onSnapshot(collection(db, 'products'), (snapshot) => {
-      setInventory(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as InventoryProduct)));
+      const allProducts = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as InventoryProduct));
+      // Remove duplicates by name
+      const unique = Array.from(new Map(allProducts.map(item => [item.name, item])).values());
+      setInventory(unique);
     });
     return () => unsubscribe();
   }, []);
@@ -122,7 +133,10 @@ export default function RoomDetail() {
   if (!room) return <div className="p-8">Cargando...</div>;
 
   const getServicePrice = (name: string, defaultPrice: number) => {
-    const service = inventory.find(p => p.name === name && p.category === 'Servicios');
+    const service = inventory.find(p => 
+      p.name.toLowerCase().trim() === name.toLowerCase().trim() && 
+      p.category === 'Servicios'
+    );
     return service ? service.price : defaultPrice;
   };
 
@@ -133,31 +147,49 @@ export default function RoomDetail() {
       return;
     }
 
-    const upcomingReservation = reservations.find(res => 
+    const nextRes = reservations.find(res => 
       isBefore(parseISO(res.date), addHours(now, 3)) &&
-      isBefore(now, parseISO(res.date))
+      isAfter(parseISO(res.date), subHours(now, 1)) // Within 3h future or 1h past
     );
 
-    if (upcomingReservation) {
-      if (!confirm(`Esta habitación tiene una reserva a las ${parseISO(upcomingReservation.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}. ¿Desea iniciar el servicio de todas formas?`)) {
-        return;
-      }
+    if (nextRes) {
+      setShowReservationWarning(nextRes);
+      return;
     }
 
+    startService();
+  };
+
+  const startService = (resToUse: any = null) => {
     const startTime = new Date();
     const endTime = new Date(startTime.getTime() + 180 * 60000); // 3 hours
+    const inventoryPrice = getServicePrice('Servicio Base', 60000);
     
+    // If resToUse is provided, it means we ARE using a reservation abono
+    const abonoValue = resToUse?.abono || 0;
+
     // Fire and forget for instant UI feedback
     updateDoc(doc(db, 'rooms', room.id), {
       status: 'Ocupada',
       startTime: startTime.toISOString(),
       endTime: endTime.toISOString(),
       persons: room.persons || 2,
+      total: inventoryPrice,
+      basePrice: inventoryPrice,
       currentHostId: appUser?.id,
-      currentHostName: appUser?.name
+      currentHostName: appUser?.name,
+      reservationAbono: abonoValue
     }).catch(console.error);
     
+    // Mark reservation as completed if it was used
+    if (resToUse) {
+      updateDoc(doc(db, 'reservations', resToUse.id), {
+        status: 'completed'
+      }).catch(console.error);
+    }
+    
     playSuccess();
+    setShowReservationWarning(null);
   };
 
   const handleAddExtraHour = async () => {
@@ -291,139 +323,186 @@ export default function RoomDetail() {
     }
   };
 
-  const handleCloseAccount = async (paymentMethod: 'Efectivo' | 'Transferencia') => {
+  const handleCloseAccount = async (paymentMethod: 'Efectivo' | 'Transferencia', photoToSave?: string | null) => {
     if (appUser?.role === 'host' && !activeShift) {
       setShowNoShiftModal(true);
       return;
     }
-    let currentInvoiceNumber: number | null = null;
+    
+    setIsSaving(true);
     try {
-      const invoiceRef = doc(db, 'settings', 'invoice');
-      const invoiceDoc = await getDoc(invoiceRef);
-      if (invoiceDoc.exists() && invoiceDoc.data().enabled) {
-        currentInvoiceNumber = invoiceDoc.data().currentNumber;
-        await updateDoc(invoiceRef, { currentNumber: currentInvoiceNumber! + 1 });
-      }
-    } catch (e) {
-      console.error("Error with invoice number", e);
+      const result = await runTransaction(db, async (transaction) => {
+        // Step 1: Reads (MUST BE FIRST)
+        const invoiceRef = doc(db, 'settings', 'invoice');
+        const invoiceDoc = await transaction.get(invoiceRef);
+        
+        const productSnapshotPromises = room.products.map(p => 
+          transaction.get(doc(db, 'products', p.id))
+        );
+        const productDocs = await Promise.all(productSnapshotPromises);
+        
+        const roomRef = doc(db, 'rooms', room.id);
+        const roomDoc = await transaction.get(roomRef);
+
+        // Step 2: Writes
+        let currentInvoiceNumber = null;
+        if (invoiceDoc.exists() && invoiceDoc.data().enabled) {
+          currentInvoiceNumber = invoiceDoc.data().currentNumber;
+          transaction.update(invoiceRef, { currentNumber: currentInvoiceNumber! + 1 });
+        }
+
+        const ticketRef = doc(collection(db, 'tickets'));
+        const ticketData = {
+          roomId: room.id,
+          roomName: room.name,
+          startTime: room.startTime || new Date().toISOString(),
+          endTime: new Date().toISOString(),
+          products: room.products,
+          services: room.services,
+          total: room.total,
+          date: new Date().toISOString(),
+          hostName: appUser?.name || 'Desconocido',
+          paymentMethod,
+          invoiceNumber: currentInvoiceNumber,
+          transferPhoto: paymentMethod === 'Transferencia' ? (photoToSave || transferPhoto) : null,
+          reservationAbono: room.reservationAbono || 0,
+          finalTotal: room.total - (room.reservationAbono || 0)
+        };
+        transaction.set(ticketRef, ticketData);
+
+        // Update Stock
+        productDocs.forEach((prodDoc, idx) => {
+          if (prodDoc.exists()) {
+            const soldQty = room.products[idx].quantity;
+            const currentStock = prodDoc.data().stock || 0;
+            transaction.update(prodDoc.ref, { stock: Math.max(0, currentStock - soldQty) });
+          }
+        });
+
+        // Reset Room
+        const nextBasePrice = getServicePrice('Servicio Base', 60000);
+        transaction.update(roomRef, {
+          status: 'Limpieza',
+          startTime: null,
+          endTime: null,
+          persons: 2,
+          services: [],
+          products: [],
+          total: nextBasePrice,
+          basePrice: nextBasePrice,
+          currentHostId: null,
+          currentHostName: null,
+          reservationAbono: 0
+        });
+
+        return { currentInvoiceNumber };
+      });
+
+      const { currentInvoiceNumber } = result;
+      setShowPaymentModal(false);
+      setTransferPhoto(null);
+      setIsCapturingPhoto(false);
+
+      const ticketHtml = `
+          <html>
+            <head>
+              <title>Ticket ${room.name}</title>
+              <style>
+                @page { margin: 0; size: 58mm auto; }
+                body { font-family: monospace; width: 100%; margin: 0 auto; padding: 2mm; box-sizing: border-box; font-size: 10px; }
+                .text-center { text-align: center; }
+                .font-bold { font-weight: bold; }
+                .text-2xl { font-size: 1.2rem; }
+                .mb-4 { margin-bottom: 0.5rem; }
+                .flex-between { display: flex; justify-content: space-between; }
+                .border-t { border-top: 1px dashed #000; padding-top: 5px; margin-top: 5px; }
+                .border-b { border-bottom: 1px dashed #000; padding-bottom: 5px; margin-bottom: 5px; }
+                table { width: 100%; text-align: left; border-collapse: collapse; }
+                th, td { padding: 4px 0; }
+                th { border-bottom: 1px solid #000; }
+                .text-right { text-align: right; }
+              </style>
+            </head>
+            <body>
+              <div class="text-center mb-4">
+                <div class="text-2xl">🔱</div>
+                <h1 class="font-bold">POSEIDÓN</h1>
+                <p>Motel</p>
+                <p>NIT: 1095823098-1</p>
+                <p>Km 1 Vía Santa Rosa-Simití</p>
+                <p>Cel: 3157170874</p>
+                <p>motelposeidonsantarosa@gmail.com</p>
+                <p>instagram:@motel_poseidon</p>
+                <p>Facebook: @PoseidonMot</p>
+                ${currentInvoiceNumber !== null ? `<p style="font-size: 1.2rem; font-weight: bold; margin-top: 5px;">FACTURA NÚMERO: ${currentInvoiceNumber}</p>` : ''}
+                ${paymentMethod === 'Transferencia' && (photoToSave || transferPhoto) ? `<p style="color: blue; font-weight: bold;">[COMPROBANTE ADJUNTO EN SISTEMA]</p>` : ''}
+              </div>
+              <div class="border-t border-b">
+                <div class="flex-between"><span>Habitación:</span> <strong>${room.name}</strong></div>
+                <div class="flex-between"><span>Fecha:</span> <span>${format(new Date(), 'dd/MM/yyyy')}</span></div>
+                <div class="flex-between"><span>Inicio:</span> <span>${room.startTime ? format(new Date(room.startTime), 'HH:mm') : ''}</span></div>
+                <div class="flex-between"><span>Fin:</span> <span>${format(new Date(), 'HH:mm')}</span></div>
+                <div class="flex-between"><span>Atiende:</span> <span>${room.currentHostName || appUser?.name}</span></div>
+                <div class="flex-between"><span>Pago:</span> <span>${paymentMethod}</span></div>
+              </div>
+              <table class="mb-4">
+                <thead>
+                  <tr>
+                    <th>Cant</th>
+                    <th>Descripción</th>
+                    <th class="text-right">Valor</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>1</td>
+                    <td>Servicio Base</td>
+                    <td class="text-right">$${getServicePrice('Servicio Base', 60000).toLocaleString()}</td>
+                  </tr>
+                  ${room.services.map(srv => `
+                    <tr>
+                      <td>${srv.quantity}</td>
+                      <td>${srv.name}</td>
+                      <td class="text-right">$${(srv.price * srv.quantity).toLocaleString()}</td>
+                    </tr>
+                  `).join('')}
+                  ${room.products.map(prod => `
+                    <tr>
+                      <td>${prod.quantity}</td>
+                      <td>${prod.name}</td>
+                      <td class="text-right">$${(prod.price * prod.quantity).toLocaleString()}</td>
+                    </tr>
+                  `).join('')}
+                </tbody>
+              </table>
+                ${room.reservationAbono ? `
+                <div class="border-t pt-2">
+                  <div class="flex-between"><span>Subtotal:</span> <span>$${room.total.toLocaleString()}</span></div>
+                  <div class="flex-between"><span>Abono Reserva:</span> <span>-$${room.reservationAbono.toLocaleString()}</span></div>
+                </div>
+                ` : ''}
+              <div class="border-t flex-between font-bold" style="font-size: 1.2rem;">
+                <span>TOTAL A PAGAR</span>
+                <span>$${(room.total - (room.reservationAbono || 0)).toLocaleString()}</span>
+              </div>
+              <div class="text-center border-t mt-4">
+                <p class="font-bold">EN POSEIDÓN, TE SENTIRÁS COMO LOS DIOSES</p>
+                <p>¡Gracias por tu visita!</p>
+              </div>
+            </body>
+          </html>
+        `;
+      
+      printTicket(ticketHtml);
+      playSuccess();
+      navigate('/');
+    } catch (err) {
+      console.error("Error closing account", err);
+      playError();
+      alert('Error al guardar el servicio. Es posible que la foto sea muy pesada o haya un error de conexión.');
+    } finally {
+      setIsSaving(false);
     }
-
-    const ticket = {
-      roomId: room.id,
-      roomName: room.name,
-      startTime: room.startTime || new Date().toISOString(),
-      endTime: new Date().toISOString(),
-      products: room.products,
-      services: room.services,
-      total: room.total,
-      date: new Date().toISOString(),
-      hostName: appUser?.name || 'Desconocido',
-      paymentMethod,
-      invoiceNumber: currentInvoiceNumber
-    };
-
-    await addDoc(collection(db, 'tickets'), ticket);
-    
-    await updateDoc(doc(db, 'rooms', room.id), {
-      status: 'Limpieza',
-      startTime: null,
-      endTime: null,
-      persons: 2,
-      services: [],
-      products: [],
-      total: getServicePrice('Servicio Base', 70000),
-      currentHostId: null,
-      currentHostName: null
-    });
-
-    setShowPaymentModal(false);
-
-    const ticketHtml = `
-        <html>
-          <head>
-            <title>Ticket ${room.name}</title>
-            <style>
-              @page { margin: 0; size: 58mm auto; }
-              body { font-family: monospace; width: 100%; margin: 0 auto; padding: 2mm; box-sizing: border-box; font-size: 10px; }
-              .text-center { text-align: center; }
-              .font-bold { font-weight: bold; }
-              .text-2xl { font-size: 1.2rem; }
-              .mb-4 { margin-bottom: 0.5rem; }
-              .flex-between { display: flex; justify-content: space-between; }
-              .border-t { border-top: 1px dashed #000; padding-top: 5px; margin-top: 5px; }
-              .border-b { border-bottom: 1px dashed #000; padding-bottom: 5px; margin-bottom: 5px; }
-              table { width: 100%; text-align: left; border-collapse: collapse; }
-              th, td { padding: 4px 0; }
-              th { border-bottom: 1px solid #000; }
-              .text-right { text-align: right; }
-            </style>
-          </head>
-          <body>
-            <div class="text-center mb-4">
-              <div class="text-2xl">🔱</div>
-              <h1 class="font-bold">POSEIDÓN</h1>
-              <p>Motel</p>
-              <p>NIT: 1095823098-1</p>
-              <p>Km 1 Vía Santa Rosa-Simití</p>
-              <p>Cel: 3157170874</p>
-              <p>motelposeidonsantarosa@gmail.com</p>
-              <p>instagram:@motel_poseidon</p>
-              <p>Facebook: @PoseidonMot</p>
-              ${currentInvoiceNumber !== null ? `<p style="font-size: 1.2rem; font-weight: bold; margin-top: 5px;">FACTURA NÚMERO: ${currentInvoiceNumber}</p>` : ''}
-            </div>
-            <div class="border-t border-b">
-              <div class="flex-between"><span>Habitación:</span> <strong>${room.name}</strong></div>
-              <div class="flex-between"><span>Fecha:</span> <span>${format(new Date(), 'dd/MM/yyyy')}</span></div>
-              <div class="flex-between"><span>Inicio:</span> <span>${room.startTime ? format(new Date(room.startTime), 'HH:mm') : ''}</span></div>
-              <div class="flex-between"><span>Fin:</span> <span>${format(new Date(), 'HH:mm')}</span></div>
-              <div class="flex-between"><span>Atiende:</span> <span>${room.currentHostName || appUser?.name}</span></div>
-              <div class="flex-between"><span>Pago:</span> <span>${paymentMethod}</span></div>
-            </div>
-            <table class="mb-4">
-              <thead>
-                <tr>
-                  <th>Cant</th>
-                  <th>Descripción</th>
-                  <th class="text-right">Valor</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td>1</td>
-                  <td>Servicio Base</td>
-                  <td class="text-right">$${getServicePrice('Servicio Base', 70000).toLocaleString()}</td>
-                </tr>
-                ${room.services.map(srv => `
-                  <tr>
-                    <td>${srv.quantity}</td>
-                    <td>${srv.name}</td>
-                    <td class="text-right">$${(srv.price * srv.quantity).toLocaleString()}</td>
-                  </tr>
-                `).join('')}
-                ${room.products.map(prod => `
-                  <tr>
-                    <td>${prod.quantity}</td>
-                    <td>${prod.name}</td>
-                    <td class="text-right">$${(prod.price * prod.quantity).toLocaleString()}</td>
-                  </tr>
-                `).join('')}
-              </tbody>
-            </table>
-            <div class="border-t flex-between font-bold" style="font-size: 1.2rem;">
-              <span>TOTAL</span>
-              <span>$${room.total.toLocaleString()}</span>
-            </div>
-            <div class="text-center border-t mt-4">
-              <p class="font-bold">EN POSEIDÓN, TE SENTIRÁS COMO LOS DIOSES</p>
-              <p>¡Gracias por tu visita!</p>
-            </div>
-          </body>
-        </html>
-      `;
-    
-    printTicket(ticketHtml);
-
-    navigate('/');
   };
 
   const handleSetFree = async () => {
@@ -439,7 +518,8 @@ export default function RoomDetail() {
       persons: 2,
       services: [],
       products: [],
-      total: getServicePrice('Servicio Base', 70000),
+      total: getServicePrice('Servicio Base', 60000),
+      basePrice: getServicePrice('Servicio Base', 60000),
       currentHostId: null,
       currentHostName: null
     });
@@ -492,15 +572,54 @@ export default function RoomDetail() {
       return a.name.localeCompare(b.name);
     });
   const sexshop = inventory.filter(p => p.category === 'Sex Shop' || p.category === 'Sexshop');
-  const otros = inventory.filter(p => p.category !== 'Bebidas' && p.category !== 'Sexshop' && p.category !== 'Sex Shop');
+  const servicios = inventory.filter(p => p.category === 'Servicios');
+  const otros = inventory.filter(p => 
+    p.category !== 'Bebidas' && 
+    p.category !== 'Sexshop' && 
+    p.category !== 'Sex Shop' && 
+    p.category !== 'Servicios'
+  );
 
   const upcomingReservation = reservations.find(res => 
     isBefore(parseISO(res.date), addHours(now, 3)) &&
     isBefore(now, parseISO(res.date))
   );
 
+  const handlePhotoCapture = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = async () => {
+        try {
+          const compressed = await compressImage(reader.result as string);
+          setTransferPhoto(compressed);
+          setIsCapturingPhoto(false);
+          playSuccess();
+          // De inmediato procesar pago al capturar foto
+          handleCloseAccount('Transferencia', compressed);
+        } catch (err) {
+          console.error("Error compressing image", err);
+          playError();
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleTransferClick = () => {
+    playClick();
+    setIsCapturingPhoto(true);
+  };
+
   return (
     <div className="max-w-7xl mx-auto pb-10">
+      <input 
+        type="file" 
+        accept="image/*" 
+        ref={fileInputRef} 
+        onChange={handlePhotoCapture}
+        className="hidden" 
+      />
       {/* Header */}
       <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 mb-8">
         <div className="flex items-center gap-4">
@@ -605,32 +724,46 @@ export default function RoomDetail() {
               )}
             </div>
 
-            {/* Quick Add Services */}
+            {/* Quick Add Services (Dynamic from Inventory) */}
             <div className="bg-white p-8 rounded-3xl border border-slate-200 shadow-sm">
               <h3 className="text-xl font-black mb-6 flex items-center gap-2 text-slate-800 uppercase tracking-tight">
                 <Users size={24} className="text-blue-600"/> Servicios Extra
               </h3>
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-                <button onClick={handleAddPerson} className="p-4 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded-2xl font-bold flex flex-col items-center gap-2 transition-all active:scale-95 border border-blue-100">
-                  <Plus size={24} /> 
-                  <span className="text-sm">Persona</span>
-                  <span className="text-xs opacity-70">${getServicePrice('Persona Adicional', 20000).toLocaleString()}</span>
-                </button>
-                <button onClick={() => handleAddService('Jacuzzi')} className="p-4 bg-purple-50 text-purple-700 hover:bg-purple-100 rounded-2xl font-bold flex flex-col items-center gap-2 transition-all active:scale-95 border border-purple-100">
-                  <Plus size={24} />
-                  <span className="text-sm">Jacuzzi</span>
-                  <span className="text-xs opacity-70">${getServicePrice('Jacuzzi', 20000).toLocaleString()}</span>
-                </button>
-                <button onClick={() => handleAddService('Sauna')} className="p-4 bg-orange-50 text-orange-700 hover:bg-orange-100 rounded-2xl font-bold flex flex-col items-center gap-2 transition-all active:scale-95 border border-orange-100">
-                  <Plus size={24} />
-                  <span className="text-sm">Sauna</span>
-                  <span className="text-xs opacity-70">${getServicePrice('Sauna', 20000).toLocaleString()}</span>
-                </button>
-                <button onClick={() => handleAddService('Turco')} className="p-4 bg-teal-50 text-teal-700 hover:bg-teal-100 rounded-2xl font-bold flex flex-col items-center gap-2 transition-all active:scale-95 border border-teal-100">
-                  <Plus size={24} />
-                  <span className="text-sm">Turco</span>
-                  <span className="text-xs opacity-70">${getServicePrice('Turco', 20000).toLocaleString()}</span>
-                </button>
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 xl:grid-cols-6 gap-3">
+                {servicios
+                  .filter(s => s.name !== 'Servicio Base' && s.name !== 'Hora Adicional')
+                  .sort((a, b) => {
+                    const getOrder = (name: string) => {
+                      const n = name.toLowerCase();
+                      if (n.includes('persona')) return 1;
+                      if (n.includes('jacuzzi')) return 2;
+                      return 3;
+                    };
+                    return getOrder(a.name) - getOrder(b.name);
+                  })
+                  .map((srv, idx) => (
+                  <button
+                    key={srv.id}
+                    onClick={() => srv.name.toLowerCase().includes('persona') ? handleAddPerson() : handleAddService(srv.name)}
+                    className={cn(
+                      "p-3 sm:p-4 rounded-3xl text-left transition-all active:scale-95 shadow-sm border border-transparent flex flex-col justify-between h-24 sm:h-32 relative overflow-hidden group",
+                      PRODUCT_COLORS[(idx + 10) % PRODUCT_COLORS.length]
+                    )}
+                  >
+                    <div className="relative z-10 w-full">
+                      <div className="text-[8px] font-black uppercase opacity-60 leading-[1.1] mb-1 whitespace-normal">{srv.name}</div>
+                      <div className="text-xl font-black tracking-tighter leading-none">${srv.price.toLocaleString()}</div>
+                    </div>
+                    <div className="relative z-10 flex justify-end items-end">
+                      <Plus size={20} className="opacity-40 group-hover:opacity-100 transition-opacity" />
+                    </div>
+                  </button>
+                ))}
+                {servicios.length === 0 && (
+                  <div className="col-span-full py-8 text-center text-slate-400 italic font-medium">
+                    No hay servicios configurados en el inventario.
+                  </div>
+                )}
               </div>
             </div>
 
@@ -640,23 +773,30 @@ export default function RoomDetail() {
                 <h3 className="text-xl font-black mb-6 flex items-center gap-2 text-slate-800 uppercase tracking-tight">
                   <Wine size={24} className="text-red-600"/> Bebidas
                 </h3>
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 xl:grid-cols-6 gap-3">
                   {bebidas.map((prod, idx) => (
                     <button 
                       key={prod.id}
                       onClick={() => handleAddProduct(prod)}
                       disabled={prod.stock <= 0}
                       className={cn(
-                        "p-4 rounded-2xl font-bold flex flex-col items-center gap-2 transition-all active:scale-95 border",
+                        "p-3 sm:p-4 rounded-3xl text-left transition-all active:scale-95 shadow-sm border border-transparent flex flex-col justify-between h-24 sm:h-32 relative overflow-hidden group",
                         prod.stock > 0 
-                          ? cn(PRODUCT_COLORS[idx % PRODUCT_COLORS.length], "border-transparent") 
+                          ? PRODUCT_COLORS[idx % PRODUCT_COLORS.length] 
                           : "bg-slate-50 text-slate-400 cursor-not-allowed border-slate-200"
                       )}
                     >
-                      <Plus size={20} className="shrink-0" />
-                      <span className="text-sm text-center leading-tight break-words w-full">{prod.name}</span>
-                      <span className="text-xs opacity-70 shrink-0">${prod.price.toLocaleString()}</span>
-                      <span className="text-[10px] bg-black/10 px-2 py-0.5 rounded-full shrink-0">Stock: {prod.stock}</span>
+                      <div className="relative z-10 w-full">
+                        <div className="text-[8px] font-black uppercase opacity-60 leading-[1.1] mb-1 whitespace-normal">{prod.name}</div>
+                        <div className="text-xl font-black tracking-tighter leading-none">${prod.price.toLocaleString()}</div>
+                      </div>
+                      <div className="relative z-10 flex justify-between items-end">
+                        <span className={cn(
+                          "text-[10px] font-black uppercase px-2 py-0.5 rounded-full",
+                          prod.stock > 5 ? "bg-black/5" : "bg-red-500 text-white"
+                        )}>Stock: {prod.stock}</span>
+                        <Plus size={20} className="opacity-40 group-hover:opacity-100 transition-opacity" />
+                      </div>
                     </button>
                   ))}
                 </div>
@@ -669,23 +809,30 @@ export default function RoomDetail() {
                 <h3 className="text-xl font-black mb-6 flex items-center gap-2 text-slate-800 uppercase tracking-tight">
                   <Heart size={24} className="text-pink-600"/> Sex Shop
                 </h3>
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 xl:grid-cols-6 gap-3">
                   {sexshop.map((prod, idx) => (
                     <button 
                       key={prod.id}
                       onClick={() => handleAddProduct(prod)}
                       disabled={prod.stock <= 0}
                       className={cn(
-                        "p-4 rounded-2xl font-bold flex flex-col items-center gap-2 transition-all active:scale-95 border",
+                        "p-3 sm:p-4 rounded-3xl text-left transition-all active:scale-95 shadow-sm border border-transparent flex flex-col justify-between h-24 sm:h-32 relative overflow-hidden group",
                         prod.stock > 0 
-                          ? cn(PRODUCT_COLORS[(idx + 5) % PRODUCT_COLORS.length], "border-transparent") 
+                          ? PRODUCT_COLORS[(idx + 5) % PRODUCT_COLORS.length] 
                           : "bg-slate-50 text-slate-400 cursor-not-allowed border-slate-200"
                       )}
                     >
-                      <Plus size={20} className="shrink-0" />
-                      <span className="text-sm text-center leading-tight break-words w-full">{prod.name}</span>
-                      <span className="text-xs opacity-70 shrink-0">${prod.price.toLocaleString()}</span>
-                      <span className="text-[10px] bg-black/10 px-2 py-0.5 rounded-full shrink-0">Stock: {prod.stock}</span>
+                      <div className="relative z-10 w-full">
+                        <div className="text-[8px] font-black uppercase opacity-60 leading-[1.1] mb-1 whitespace-normal">{prod.name}</div>
+                        <div className="text-xl font-black tracking-tighter leading-none">${prod.price.toLocaleString()}</div>
+                      </div>
+                      <div className="relative z-10 flex justify-between items-end">
+                        <span className={cn(
+                          "text-[10px] font-black uppercase px-2 py-0.5 rounded-full",
+                          prod.stock > 5 ? "bg-black/5" : "bg-red-500 text-white"
+                        )}>Stock: {prod.stock}</span>
+                        <Plus size={20} className="opacity-40 group-hover:opacity-100 transition-opacity" />
+                      </div>
                     </button>
                   ))}
                 </div>
@@ -709,8 +856,15 @@ export default function RoomDetail() {
               <div className="flex-1 overflow-y-auto space-y-4 mb-8 min-h-[200px]">
                 <div className="flex justify-between items-center text-sm font-bold text-slate-700">
                   <span>Servicio Base (3h)</span>
-                  <span>${getServicePrice('Servicio Base', 70000).toLocaleString()}</span>
+                  <span>${(room.basePrice || getServicePrice('Servicio Base', 60000)).toLocaleString()}</span>
                 </div>
+
+                {room.reservationAbono && room.reservationAbono > 0 && (
+                  <div className="flex justify-between items-center text-sm font-black text-blue-600 bg-blue-50 p-2 rounded-lg">
+                    <span>Abono Reserva</span>
+                    <span>-${room.reservationAbono.toLocaleString()}</span>
+                  </div>
+                )}
                 
                 {room.services.map(srv => (
                   <div key={srv.id} className="flex justify-between items-center text-sm group animate-in fade-in slide-in-from-right-4">
@@ -743,10 +897,22 @@ export default function RoomDetail() {
                 ))}
               </div>
 
-              <div className="border-t-4 border-double pt-6 mt-auto">
-                <div className="flex flex-col items-end">
+              <div className="border-t-4 border-double pt-6 mt-auto space-y-3">
+                <div className="flex justify-between items-center text-slate-500 font-bold">
+                  <span>Subtotal Acumulado</span>
+                  <span className="text-xl">${room.total.toLocaleString()}</span>
+                </div>
+                {room.reservationAbono ? (
+                  <div className="flex justify-between items-center text-blue-600 font-bold px-3 py-2 bg-blue-50 rounded-xl">
+                    <span>Abono Aplicado</span>
+                    <span className="text-xl">-${room.reservationAbono.toLocaleString()}</span>
+                  </div>
+                ) : null}
+                <div className="flex flex-col items-end pt-2">
                   <span className="text-sm font-black text-slate-400 uppercase tracking-widest mb-1">Total a Pagar</span>
-                  <span className="text-5xl font-black text-slate-900 tracking-tighter">${room.total.toLocaleString()}</span>
+                  <span className="text-5xl font-black text-slate-900 tracking-tighter">
+                    ${(room.total - (room.reservationAbono || 0)).toLocaleString()}
+                  </span>
                 </div>
               </div>
             </div>
@@ -764,20 +930,118 @@ export default function RoomDetail() {
               </button>
             </div>
             <p className="text-slate-600 mb-6">
-              Seleccione el método de pago para el total de <strong>${room.total.toLocaleString()}</strong>:
+              Seleccione el método de pago para el saldo de <strong>${(room.total - (room.reservationAbono || 0)).toLocaleString()}</strong>:
             </p>
             <div className="flex flex-col gap-3">
-              <button
-                onClick={() => { playClick(); handleCloseAccount('Efectivo'); }}
-                className="w-full py-5 bg-green-600 hover:bg-green-700 text-white font-black rounded-2xl text-xl shadow-lg shadow-green-100 transition-all active:scale-95"
+              {isSaving ? (
+                <div className="py-8 flex flex-col items-center gap-3 text-blue-600">
+                  <RotateCcw className="animate-spin" size={48} />
+                  <p className="font-black uppercase">Procesando Pago...</p>
+                </div>
+              ) : !isCapturingPhoto ? (
+                <>
+                  <button
+                    onClick={() => { playClick(); handleCloseAccount('Efectivo'); }}
+                    className="w-full py-5 bg-green-600 hover:bg-green-700 text-white font-black rounded-2xl text-xl shadow-lg shadow-green-100 transition-all active:scale-95"
+                  >
+                    Efectivo
+                  </button>
+                  <button
+                    onClick={handleTransferClick}
+                    className="w-full py-5 bg-blue-600 hover:bg-blue-700 text-white font-black rounded-2xl text-xl shadow-lg shadow-blue-100 transition-all active:scale-95"
+                  >
+                    Transferencia
+                  </button>
+                </>
+              ) : (
+                <div className="space-y-4 text-center">
+                  <div className="p-4 bg-blue-50 rounded-2xl mb-4">
+                    <p className="text-blue-700 font-bold mb-2 uppercase text-xs">Pago por Transferencia</p>
+                    {transferPhoto ? (
+                      <div className="relative inline-block">
+                        <img src={transferPhoto} alt="Comprobante" className="max-h-48 rounded-lg shadow-md mx-auto" />
+                        <button 
+                          onClick={() => setTransferPhoto(null)}
+                          className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 shadow-md"
+                        >
+                          <X size={16} />
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="py-8 border-2 border-dashed border-blue-200 rounded-xl flex flex-col items-center gap-3">
+                        <AlertCircle size={32} className="text-blue-400" />
+                        <p className="text-slate-500 text-sm">Tome una foto del comprobante de transferencia para continuar</p>
+                      </div>
+                    )}
+                  </div>
+                  
+                  <div className="flex flex-col gap-2">
+                    {!transferPhoto ? (
+                      <button
+                        onClick={() => fileInputRef.current?.click()}
+                        className="w-full py-4 bg-blue-600 hover:bg-blue-700 text-white font-black rounded-2xl text-lg flex items-center justify-center gap-2"
+                      >
+                        Adjuntar o Tomar Fotografía
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => handleCloseAccount('Transferencia')}
+                        className="w-full py-4 bg-green-600 hover:bg-green-700 text-white font-black rounded-2xl text-lg flex items-center justify-center gap-2"
+                      >
+                        Confirmar y Guardar
+                      </button>
+                    )}
+                    <button
+                      onClick={() => { setIsCapturingPhoto(false); setTransferPhoto(null); }}
+                      className="w-full py-2 text-slate-500 font-bold uppercase text-xs"
+                    >
+                      Volver
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reservation Warning Modal */}
+      {showReservationWarning && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-[60] p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl animate-in zoom-in-95 duration-200">
+            <div className="text-center mb-6">
+              <div className="w-20 h-20 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                <CalendarCheck size={40} />
+              </div>
+              <h3 className="text-2xl font-black text-slate-900 uppercase tracking-tight leading-tight">¡Ojo! Reserva Próxima</h3>
+              <p className="text-slate-500 text-sm font-bold uppercase mt-2">
+                Cliente: <span className="text-blue-600">{showReservationWarning.clientName}</span><br />
+                Hora: {parseISO(showReservationWarning.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+              </p>
+            </div>
+            
+            <p className="text-slate-600 text-center mb-8 font-medium">
+              ¿Esta persona es quien hizo la reserva? Si es así, se aplicará el abono de <span className="text-blue-600 font-bold">${(showReservationWarning.abono || 0).toLocaleString()}</span> a la cuenta.
+            </p>
+
+            <div className="flex flex-col gap-3">
+              <button 
+                onClick={() => { playClick(); startService(showReservationWarning); }}
+                className="w-full py-4 bg-blue-600 hover:bg-blue-700 text-white font-black uppercase text-xs rounded-2xl shadow-lg shadow-blue-100 transition-all active:scale-95"
               >
-                Efectivo
+                Sí, es el Cliente (Aplicar Abono)
               </button>
-              <button
-                onClick={() => { playClick(); handleCloseAccount('Transferencia'); }}
-                className="w-full py-5 bg-blue-600 hover:bg-blue-700 text-white font-black rounded-2xl text-xl shadow-lg shadow-blue-100 transition-all active:scale-95"
+              <button 
+                onClick={() => { playClick(); startService(null); }}
+                className="w-full py-4 bg-slate-900 hover:bg-black text-white font-black uppercase text-xs rounded-2xl transition-all"
               >
-                Transferencia
+                No es él (Iniciar sin Abono)
+              </button>
+              <button 
+                onClick={() => { playClick(); setShowReservationWarning(null); }}
+                className="w-full py-3 text-slate-500 font-bold uppercase text-[10px] tracking-widest"
+              >
+                Cancelar y Volver
               </button>
             </div>
           </div>

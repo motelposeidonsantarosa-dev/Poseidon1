@@ -1,13 +1,32 @@
-import { useEffect, useState, useRef } from 'react';
-import { collection, onSnapshot, doc, setDoc, query, where, getDocs, updateDoc, addDoc, deleteDoc } from 'firebase/firestore';
+import { useEffect, useState, useRef, ChangeEvent } from 'react';
+import { collection, onSnapshot, doc, setDoc, query, where, getDocs, updateDoc, addDoc, deleteDoc, runTransaction, getDoc } from 'firebase/firestore';
 import { db } from '../firebase';
-import { Link } from 'react-router-dom';
-import { Clock, Users, BedDouble, PlayCircle, StopCircle, Plus, Edit2, X, CalendarCheck, AlertCircle, User } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
+import { Clock, Users, BedDouble, PlayCircle, StopCircle, Plus, Edit2, X, CalendarCheck, AlertCircle, User, ShoppingBag, Wine, Heart, Trash2, Camera, RotateCcw, Search, Printer, Minus } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useAuth } from '../contexts/AuthContext';
 import { useFeedback } from '../hooks/useFeedback';
 import { parseISO, isBefore, addHours, subHours, format } from 'date-fns';
 import { printTicket } from '../utils/print';
+import { compressImage } from '../utils/image';
+import { es } from 'date-fns/locale';
+
+const PRODUCT_COLORS = [
+  "bg-red-100 text-red-700 hover:bg-red-200",
+  "bg-orange-100 text-orange-700 hover:bg-orange-200",
+  "bg-amber-100 text-amber-700 hover:bg-amber-200",
+  "bg-green-100 text-green-700 hover:bg-green-200",
+  "bg-emerald-100 text-emerald-700 hover:bg-emerald-200",
+  "bg-teal-100 text-teal-700 hover:bg-teal-200",
+  "bg-cyan-100 text-cyan-700 hover:bg-cyan-200",
+  "bg-blue-100 text-blue-700 hover:bg-blue-200",
+  "bg-indigo-100 text-indigo-700 hover:bg-indigo-200",
+  "bg-violet-100 text-violet-700 hover:bg-violet-200",
+  "bg-purple-100 text-purple-700 hover:bg-purple-200",
+  "bg-fuchsia-100 text-fuchsia-700 hover:bg-fuchsia-200",
+  "bg-pink-100 text-pink-700 hover:bg-pink-200",
+  "bg-rose-100 text-rose-700 hover:bg-rose-200"
+];
 
 interface Room {
   id: string;
@@ -17,6 +36,7 @@ interface Room {
   endTime: string | null;
   persons: number;
   total: number;
+  basePrice?: number;
 }
 
 interface Shift {
@@ -29,6 +49,7 @@ interface Shift {
 
 export default function Dashboard() {
   const { appUser, logout } = useAuth();
+  const navigate = useNavigate();
   const { playClick, playSuccess, playError } = useFeedback();
   const [rooms, setRooms] = useState<Room[]>([]);
   const [reservations, setReservations] = useState<any[]>([]);
@@ -43,9 +64,22 @@ export default function Dashboard() {
   const [editRoomName, setEditRoomName] = useState('');
   const [showStartShiftModal, setShowStartShiftModal] = useState(false);
 
+  // Venta Directa States
+  const [showDirectSale, setShowDirectSale] = useState(false);
+  const [directSaleProducts, setDirectSaleProducts] = useState<any[]>([]);
+  const [directSaleTotal, setDirectSaleTotal] = useState(0);
+  const [directSalePaymentMethod, setDirectSalePaymentMethod] = useState<'Efectivo' | 'Transferencia' | null>(null);
+  const [directSalePhoto, setDirectSalePhoto] = useState<string | null>(null);
+  const [isDirectSaleSaving, setIsDirectSaleSaving] = useState(false);
+  const [isCapturingDirectPhoto, setIsCapturingDirectPhoto] = useState(false);
+  const directFileInputRef = useRef<HTMLInputElement>(null);
+
   useEffect(() => {
     const unsubscribe = onSnapshot(collection(db, 'products'), (snapshot) => {
-      setInventory(snapshot.docs.map(d => d.data()));
+      const prods = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as any));
+      // Duplicate prevention
+      const unique = Array.from(new Map(prods.map((item: any) => [item.name, item])).values());
+      setInventory(unique);
     });
     return () => unsubscribe();
   }, []);
@@ -59,9 +93,28 @@ export default function Dashboard() {
   }, []);
 
   const getBasePrice = () => {
-    const baseService = inventory.find(p => p.name === 'Servicio Base' && p.category === 'Servicios');
-    return baseService ? baseService.price : 70000;
+    const baseService = inventory.find(p => p.name.toLowerCase().trim() === 'servicio base' && p.category === 'Servicios');
+    return baseService ? baseService.price : 60000;
   };
+
+  // Sincronizar precios de habitaciones libres cuando cambia el inventario
+  useEffect(() => {
+    if (inventory.length === 0 || loading) return;
+    
+    const currentBasePrice = getBasePrice();
+    rooms.forEach(async (room) => {
+      if (room.status === 'Libre' && (room.total !== currentBasePrice || room.basePrice !== currentBasePrice)) {
+        try {
+          await updateDoc(doc(db, 'rooms', room.id), { 
+            total: currentBasePrice,
+            basePrice: currentBasePrice
+          });
+        } catch (e) {
+          console.error("Error syncing room price:", e);
+        }
+      }
+    });
+  }, [inventory, rooms, loading]);
 
   useEffect(() => {
     audioRef.current = new Audio('https://actions.google.com/sounds/v1/alarms/beep_short.ogg');
@@ -96,7 +149,7 @@ export default function Dashboard() {
       
       if (productsSnap.empty) {
         const requiredServices = [
-          { name: "Servicio Base", price: 70000, stock: 999, category: "Servicios" },
+          { name: "Servicio Base", price: 60000, stock: 999, category: "Servicios" },
           { name: "Hora Adicional", price: 20000, stock: 999, category: "Servicios" },
           { name: "Persona Adicional", price: 20000, stock: 999, category: "Servicios" },
           { name: "Jacuzzi", price: 20000, stock: 999, category: "Servicios" },
@@ -154,6 +207,7 @@ export default function Dashboard() {
             services: [],
             products: [],
             total: getBasePrice(),
+            basePrice: getBasePrice(),
             currentHostId: null,
             currentHostName: null
           });
@@ -218,16 +272,24 @@ export default function Dashboard() {
       let incomeEfectivo = 0;
       let incomeTransferencia = 0;
       let servicesCount = 0;
+      let directSalesCount = 0;
+      let directSalesTotal = 0;
       
       ticketsSnap.forEach(doc => {
         const data = doc.data();
         if (data.date >= activeShift.startTime) {
-          servicesCount++;
+          if (data.roomId === 'DIRECTA') {
+            directSalesCount++;
+            directSalesTotal += data.total;
+          } else {
+            servicesCount++;
+          }
+          
           totalIncome += data.total;
           if (data.paymentMethod === 'Transferencia') {
             incomeTransferencia += data.total;
           } else {
-            incomeEfectivo += data.total; // Default to Efectivo if not specified
+            incomeEfectivo += data.total;
           }
         }
       });
@@ -304,7 +366,10 @@ export default function Dashboard() {
                 <div class="flex-between font-bold mt-2"><span>UTILIDADES:</span> <span>$${utilidadesTotales.toLocaleString()}</span></div>
                 <div class="flex-between text-slate-600"><span>- Efectivo:</span> <span>$${utilidadesEfectivo.toLocaleString()}</span></div>
                 <div class="flex-between text-slate-600"><span>- Transferencia:</span> <span>$${utilidadesTransferencia.toLocaleString()}</span></div>
-                <div class="flex-between mt-2"><span>Servicios Terminados:</span> <span>${servicesCount}</span></div>
+                <div class="border-t mt-2 pt-2">
+                  <div class="flex-between"><span>Servicios Hab:</span> <span>${servicesCount}</span></div>
+                  <div class="flex-between"><span>Ventas Directas:</span> <span>${directSalesCount} ($${directSalesTotal.toLocaleString()})</span></div>
+                </div>
               </div>
               <div class="border-t">
                 <div class="font-bold mb-2">Habitaciones Activas: ${activeRooms.length}</div>
@@ -330,6 +395,216 @@ export default function Dashboard() {
       playError();
       console.error(err);
       setIsEndingShift(false);
+    }
+  };
+
+  const handleDirectSaleToggleProduct = (product: any) => {
+    playClick();
+    const existing = directSaleProducts.find(p => p.id === product.id);
+    const currentQty = existing ? existing.quantity : 0;
+
+    if (currentQty + 1 > product.stock) {
+      playError();
+      return;
+    }
+
+    let newProducts;
+    if (existing) {
+      newProducts = directSaleProducts.map(p => p.id === product.id ? { ...p, quantity: p.quantity + 1 } : p);
+    } else {
+      newProducts = [...directSaleProducts, { ...product, quantity: 1 }];
+    }
+    setDirectSaleProducts(newProducts);
+    setDirectSaleTotal(newProducts.reduce((acc, p) => acc + (p.price * p.quantity), 0));
+  };
+
+  const handleUpdateDirectSaleQuantity = (productId: string, delta: number) => {
+    const existing = directSaleProducts.find(p => p.id === productId);
+    if (!existing) return;
+
+    if (delta > 0) {
+      // Check stock
+      const inventoryItem = inventory.find(i => i.id === productId);
+      if (inventoryItem && existing.quantity + 1 > inventoryItem.stock) {
+        playError();
+        return;
+      }
+    }
+
+    playClick();
+    const newProducts = directSaleProducts.map(p => {
+      if (p.id === productId) {
+        const newQty = Math.max(1, p.quantity + delta);
+        return { ...p, quantity: newQty };
+      }
+      return p;
+    });
+
+    setDirectSaleProducts(newProducts);
+    setDirectSaleTotal(newProducts.reduce((acc, p) => acc + (p.price * p.quantity), 0));
+  };
+
+  const handleDirectSaleRemoveProduct = (productId: string) => {
+    playClick();
+    const newProducts = directSaleProducts.filter(p => p.id !== productId);
+    setDirectSaleProducts(newProducts);
+    setDirectSaleTotal(newProducts.reduce((acc, p) => acc + (p.price * p.quantity), 0));
+  };
+
+  const handleProcessDirectSale = async (method: 'Efectivo' | 'Transferencia', photoToSave?: string | null) => {
+    if (directSaleProducts.length === 0) return;
+    setIsDirectSaleSaving(true);
+    playClick();
+
+    try {
+      await runTransaction(db, async (transaction) => {
+        // Step 1: Fetch all required data first (Reads)
+        const invoiceRef = doc(db, 'settings', 'invoice');
+        const invoiceDoc = await transaction.get(invoiceRef);
+        
+        const prodDocs = await Promise.all(
+          directSaleProducts.map(item => transaction.get(doc(db, 'products', item.id)))
+        );
+
+        // Step 2: Handle Invoice number (Writes)
+        let currentInvoiceNumber = null;
+        if (invoiceDoc.exists() && invoiceDoc.data().enabled) {
+          currentInvoiceNumber = invoiceDoc.data().currentNumber;
+          transaction.update(invoiceRef, { currentNumber: currentInvoiceNumber + 1 });
+        }
+
+        // Step 3: Create ticket (Writes)
+        const ticketRef = doc(collection(db, 'tickets'));
+        const ticketData = {
+          roomId: 'DIRECTA',
+          roomName: 'Venta Directa',
+          startTime: new Date().toISOString(),
+          endTime: new Date().toISOString(),
+          products: directSaleProducts,
+          services: [],
+          total: directSaleTotal,
+          date: new Date().toISOString(),
+          hostId: appUser?.id || '',
+          hostName: appUser?.name || 'Desconocido',
+          shiftId: activeShift?.id || null,
+          paymentMethod: method,
+          invoiceNumber: currentInvoiceNumber,
+          transferPhoto: method === 'Transferencia' ? (photoToSave || directSalePhoto) : null
+        };
+        transaction.set(ticketRef, ticketData);
+
+        // Step 4: Update stock (Writes)
+        prodDocs.forEach((prodDoc, index) => {
+          if (prodDoc.exists()) {
+            const item = directSaleProducts[index];
+            const currentStock = prodDoc.data().stock || 0;
+            transaction.update(prodDoc.ref, { stock: Math.max(0, currentStock - item.quantity) });
+          }
+        });
+
+        return { currentInvoiceNumber, method, photoToSave };
+      }).then(async (result) => {
+        // Step 4: Print
+        const ticketHtml = `
+          <html>
+            <head>
+              <title>Venta Directa</title>
+              <style>
+                @page { margin: 0; size: 58mm auto; }
+                body { font-family: monospace; width: 100%; margin: 0 auto; padding: 2mm; box-sizing: border-box; font-size: 10px; }
+                .text-center { text-align: center; }
+                .font-bold { font-weight: bold; }
+                .text-2xl { font-size: 1.2rem; }
+                .mb-4 { margin-bottom: 0.5rem; }
+                .flex-between { display: flex; justify-content: space-between; }
+                .border-t { border-top: 1px dashed #000; padding-top: 5px; margin-top: 5px; }
+                .border-b { border-bottom: 1px dashed #000; padding-bottom: 5px; margin-bottom: 5px; }
+                table { width: 100%; text-align: left; border-collapse: collapse; }
+                th, td { padding: 4px 0; }
+                th { border-bottom: 1px solid #000; }
+                .text-right { text-align: right; }
+              </style>
+            </head>
+            <body>
+              <div class="text-center mb-4">
+                <div class="text-2xl">🔱</div>
+                <h1 class="font-bold">POSEIDÓN</h1>
+                <p>Motel</p>
+                <p>NIT: 1095823098-1</p>
+                <p>Km 1 Vía Santa Rosa-Simití</p>
+                <p>Cel: 3157170874</p>
+                <p>motelposeidonsantarosa@gmail.com</p>
+                <p>Facebook: @PoseidonMot</p>
+                <p class="font-bold border-t border-b py-1" style="margin-top: 5px; font-size: 1.1rem;">VENTA DIRECTA</p>
+                ${result.currentInvoiceNumber ? `<p style="font-size: 1.2rem; font-weight: bold; margin-top: 5px;">FACTURA NÚMERO: ${result.currentInvoiceNumber}</p>` : ''}
+                ${result.method === 'Transferencia' && (result.photoToSave || directSalePhoto) ? `<p style="color: blue; font-weight: bold;">[COMPROBANTE ADJUNTO EN SISTEMA]</p>` : ''}
+              </div>
+              <div class="border-t border-b">
+                <div class="flex-between"><span>Fecha:</span> <span>${format(new Date(), 'dd/MM/yyyy HH:mm')}</span></div>
+                <div class="flex-between"><span>Atiende:</span> <span>${appUser?.name}</span></div>
+                <div class="flex-between"><span>Pago:</span> <span>${result.method}</span></div>
+              </div>
+              <table class="mb-4">
+                <thead>
+                  <tr>
+                    <th>Cant</th>
+                    <th>Descripción</th>
+                    <th class="text-right">Valor</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${directSaleProducts.map(p => `
+                    <tr>
+                      <td>${p.quantity}</td>
+                      <td>${p.name}</td>
+                      <td class="text-right">$${(p.price * p.quantity).toLocaleString()}</td>
+                    </tr>
+                  `).join('')}
+                </tbody>
+              </table>
+              <div class="border-t flex-between font-bold" style="font-size: 1.2rem;">
+                <span>TOTAL</span>
+                <span>$${directSaleTotal.toLocaleString()}</span>
+              </div>
+              <div class="text-center border-t mt-4">
+                <p class="font-bold">EN POSEIDÓN, TE SENTIRÁS COMO LOS DIOSES</p>
+                <p>¡Gracias por tu compra!</p>
+              </div>
+            </body>
+          </html>
+        `;
+        printTicket(ticketHtml);
+        playSuccess();
+        setShowDirectSale(false);
+        setDirectSaleProducts([]);
+        setDirectSaleTotal(0);
+        setDirectSalePaymentMethod(null);
+        setDirectSalePhoto(null);
+      });
+    } catch (err) {
+      playError();
+      console.error(err);
+      alert('Error al realizar la venta directa.');
+    } finally {
+      setIsDirectSaleSaving(false);
+    }
+  };
+
+  const handleDirectPhotoCapture = (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = async () => {
+        try {
+          const compressed = await compressImage(reader.result as string);
+          setDirectSalePhoto(compressed);
+          setIsCapturingDirectPhoto(false);
+          playSuccess();
+        } catch (err) {
+          playError();
+        }
+      };
+      reader.readAsDataURL(file);
     }
   };
 
@@ -382,7 +657,13 @@ export default function Dashboard() {
     <div className="max-w-7xl mx-auto">
       <div className="flex justify-between items-center mb-8">
         <h1 className="text-3xl font-bold text-slate-900">Estado de Habitaciones</h1>
-        <div className="flex gap-3">
+        <div className="flex flex-wrap sm:flex-nowrap gap-3">
+          <button 
+            onClick={() => { playClick(); setShowDirectSale(true); }} 
+            className="bg-amber-500 hover:bg-amber-600 text-white px-4 py-2 rounded-xl font-bold flex items-center gap-2 shadow-lg transition-transform hover:scale-105"
+          >
+            <ShoppingBag size={20} /> Venta Directa
+          </button>
           {appUser?.role === 'admin' && (
             <button onClick={() => { playClick(); setShowAddRoom(true); }} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl font-bold flex items-center gap-2 shadow-lg transition-transform hover:scale-105">
               <Plus size={20} /> Añadir Habitación
@@ -634,6 +915,301 @@ export default function Dashboard() {
             >
               Entendido
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Venta Directa Modal */}
+      {showDirectSale && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-[60] p-4">
+          <div className="bg-white rounded-3xl p-4 lg:p-8 max-w-6xl w-full h-[90vh] overflow-hidden flex flex-col shadow-2xl animate-in zoom-in-95 duration-200">
+            <input 
+              type="file" 
+              accept="image/*" 
+              ref={directFileInputRef} 
+              onChange={handleDirectPhotoCapture}
+              className="hidden" 
+            />
+            
+            <div className="flex justify-between items-center mb-6">
+              <div className="flex items-center gap-3">
+                <ShoppingBag size={32} className="text-amber-500" />
+                <h3 className="text-2xl font-black text-slate-900 uppercase tracking-tight">Venta Directa</h3>
+              </div>
+              <button 
+                onClick={() => setShowDirectSale(false)} 
+                className="p-2 hover:bg-slate-100 rounded-xl transition-colors text-slate-400"
+              >
+                <X size={24} />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto lg:overflow-hidden flex flex-col lg:flex-row gap-8 pb-10 sm:pb-0">
+              {/* Left Column: Products Selection */}
+              <div className="w-full lg:flex-1 lg:overflow-y-auto lg:pr-2 custom-scrollbar space-y-8 pb-8">
+                {/* Bebidas */}
+                <section>
+                  <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2 border-b pb-2">
+                    <Wine size={16} /> Bebidas
+                  </h4>
+                  <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 [@media(max-height:600px)_and_(orientation:landscape)]:grid-cols-4 gap-2 sm:gap-3">
+                    {(() => {
+                      const getBOrder = (name: string) => {
+                        const low = name.toLowerCase();
+                        if (low.includes('cerveza')) return 1;
+                        if (low.includes('aguardiente')) return 2;
+                        if (low.includes('smirnoff')) return 3;
+                        if (low.includes('champaña')) return 4;
+                        if (low.includes('agua')) return 5;
+                        if (low.includes('coca cola')) return 6;
+                        if (low === 'soda') return 7;
+                        if (low.includes('electrolit')) return 8;
+                        if (low.includes('hatsu')) return 9;
+                        if (low.includes('gatorade')) return 10;
+                        if (low.includes('cola y pola')) return 11;
+                        if (low.includes('jugo hit')) return 12;
+                        return 99;
+                      };
+                      
+                      return inventory
+                        .filter(p => p.category === 'Bebidas')
+                        .sort((a, b) => {
+                          const oa = getBOrder(a.name);
+                          const ob = getBOrder(b.name);
+                          if (oa !== ob) return oa - ob;
+                          return a.name.localeCompare(b.name);
+                        })
+                        .map((p, idx) => {
+                          const inCart = directSaleProducts.find(item => item.id === p.id)?.quantity || 0;
+                          const effectiveStock = p.stock - inCart;
+                          return (
+                            <button
+                              key={p.id}
+                              onClick={() => handleDirectSaleToggleProduct(p)}
+                              className={cn(
+                                "p-3 sm:p-4 rounded-3xl text-left transition-all active:scale-95 shadow-sm border border-transparent flex flex-col justify-between h-24 sm:h-32 relative overflow-hidden group",
+                                PRODUCT_COLORS[idx % PRODUCT_COLORS.length]
+                              )}
+                              disabled={effectiveStock <= 0}
+                            >
+                              <div className="relative z-10">
+                                <div className="text-[10px] font-black uppercase opacity-60 leading-none mb-1">{p.name}</div>
+                                <div className="text-xl font-black tracking-tighter leading-none">${p.price.toLocaleString()}</div>
+                              </div>
+                              <div className="relative z-10 flex justify-between items-end">
+                                <span className={cn(
+                                  "text-[10px] font-black uppercase px-2 py-0.5 rounded-full",
+                                  effectiveStock > 10 ? "bg-black/5" : "bg-red-500 text-white"
+                                )}>Stock: {effectiveStock}</span>
+                                <Plus size={20} className="opacity-40 group-hover:opacity-100 transition-opacity" />
+                              </div>
+                            </button>
+                          );
+                        });
+                    })()}
+                  </div>
+                </section>
+
+                {/* Sexshop */}
+                <section>
+                  <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2 border-b pb-2">
+                    <Heart size={16} /> Sex Shop
+                  </h4>
+                  <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 [@media(max-height:600px)_and_(orientation:landscape)]:grid-cols-4 gap-2 sm:gap-3">
+                    {inventory.filter(p => p.category === 'Sexshop' || p.category === 'Sex Shop').map((p, idx) => {
+                      const inCart = directSaleProducts.find(item => item.id === p.id)?.quantity || 0;
+                      const effectiveStock = p.stock - inCart;
+                      return (
+                         <button
+                          key={p.id}
+                          onClick={() => handleDirectSaleToggleProduct(p)}
+                          className={cn(
+                            "p-3 sm:p-4 rounded-3xl text-left transition-all active:scale-95 shadow-sm border border-transparent flex flex-col justify-between h-24 sm:h-32 relative overflow-hidden group",
+                            PRODUCT_COLORS[(idx + 6) % PRODUCT_COLORS.length]
+                          )}
+                          disabled={effectiveStock <= 0}
+                        >
+                          <div className="relative z-10 w-full">
+                            <div className="text-[8px] font-black uppercase opacity-60 leading-[1.1] mb-1 whitespace-normal">{p.name}</div>
+                            <div className="text-xl font-black tracking-tighter leading-none">${p.price.toLocaleString()}</div>
+                          </div>
+                          <div className="relative z-10 flex justify-between items-end">
+                            <span className={cn(
+                              "text-[10px] font-black uppercase px-2 py-0.5 rounded-full",
+                              effectiveStock > 10 ? "bg-black/5" : "bg-red-500 text-white"
+                            )}>Stock: {effectiveStock}</span>
+                            <Plus size={20} className="opacity-40 group-hover:opacity-100 transition-opacity" />
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </section>
+
+                {/* Servicios */}
+                {inventory.some(p => p.category === 'Servicios') && (
+                  <section>
+                    <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2 border-b pb-2">
+                      <Users size={16} /> Servicios
+                    </h4>
+                    <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 [@media(max-height:600px)_and_(orientation:landscape)]:grid-cols-4 gap-2 sm:gap-3">
+                      {inventory.filter(p => p.category === 'Servicios').map((p, idx) => {
+                        return (
+                          <button
+                            key={p.id}
+                            onClick={() => handleDirectSaleToggleProduct(p)}
+                            className={cn(
+                              "p-3 sm:p-4 rounded-3xl text-left transition-all active:scale-95 shadow-sm border border-transparent flex flex-col justify-between h-24 sm:h-32 relative overflow-hidden group",
+                              PRODUCT_COLORS[(idx + 12) % PRODUCT_COLORS.length]
+                            )}
+                          >
+                            <div className="relative z-10 w-full">
+                              <div className="text-[8px] font-black uppercase opacity-60 leading-[1.1] mb-1 whitespace-normal">{p.name}</div>
+                              <div className="text-xl font-black tracking-tighter leading-none">${p.price.toLocaleString()}</div>
+                            </div>
+                            <div className="relative z-10 flex justify-end items-end">
+                              <Plus size={20} className="opacity-40 group-hover:opacity-100 transition-opacity" />
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </section>
+                )}
+              </div>
+
+              {/* Right Column: Order Summary & Checkout */}
+              <div className="w-full lg:w-[320px] 2xl:w-[380px] flex flex-col lg:h-full bg-slate-50 rounded-[2.5rem] p-3 md:p-4 lg:p-6 border border-slate-100 shadow-inner mt-auto lg:mt-0">
+                <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 px-1">Resumen de Venta</h4>
+                
+                <div className="flex-1 overflow-y-auto space-y-2 mb-4 pr-1 custom-scrollbar min-h-[200px]">
+                  {directSaleProducts.length === 0 ? (
+                    <div className="h-full flex flex-col items-center justify-center text-slate-300 text-center py-12">
+                      <ShoppingBag size={64} className="mb-4 opacity-10" />
+                      <p className="text-[9px] font-black uppercase tracking-widest opacity-40 text-center">Pedido Vacío</p>
+                    </div>
+                  ) : (
+                    directSaleProducts.map(p => (
+                      <div key={p.id} className="bg-white p-2 md:p-3 rounded-2xl border border-slate-100 flex justify-between items-center group animate-in slide-in-from-right-4 shadow-sm">
+                        <div className="flex-1 min-w-0 pr-1">
+                          <div className="text-[9px] md:text-[10px] font-black text-slate-900 uppercase truncate mb-0.5">{p.name}</div>
+                          <div className="text-[9px] md:text-[11px] font-bold text-slate-400">
+                            ${p.price.toLocaleString()} x {p.quantity}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <div className="flex items-center bg-slate-50 rounded-lg p-0.5 border border-slate-100">
+                            <button 
+                              onClick={() => handleUpdateDirectSaleQuantity(p.id, -1)}
+                              className="w-5 h-5 md:w-6 md:h-6 flex items-center justify-center hover:bg-white rounded-md transition-colors text-slate-400"
+                            >
+                              <Minus size={10} />
+                            </button>
+                            <span className="w-4 md:w-5 text-center text-[10px] md:text-xs font-black">{p.quantity}</span>
+                            <button 
+                              onClick={() => handleUpdateDirectSaleQuantity(p.id, 1)}
+                              className="w-5 h-5 md:w-6 md:h-6 flex items-center justify-center hover:bg-white rounded-md transition-colors text-slate-400"
+                            >
+                              <Plus size={10} />
+                            </button>
+                          </div>
+                          <span className="text-[9px] md:text-[11px] font-black text-blue-600 tracking-tighter w-14 text-right">${(p.price * p.quantity).toLocaleString()}</span>
+                          <button 
+                            onClick={() => handleDirectSaleRemoveProduct(p.id)} 
+                            className="p-1 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+
+                <div className="border-t border-slate-200 pt-4 space-y-4">
+                  <div className="flex flex-col items-end px-1">
+                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 leading-none">Total Venta</span>
+                    <span className="text-3xl md:text-5xl font-black text-slate-900 tracking-tighter leading-none">${directSaleTotal.toLocaleString()}</span>
+                  </div>
+
+                  {!directSalePaymentMethod ? (
+                    <div className="grid grid-cols-2 gap-3">
+                      <button 
+                        onClick={() => { playClick(); setDirectSalePaymentMethod('Efectivo'); }}
+                        disabled={directSaleProducts.length === 0 || isDirectSaleSaving}
+                        className="bg-emerald-600 hover:bg-emerald-700 text-white py-5 rounded-2xl font-black uppercase text-sm shadow-xl shadow-emerald-100 transition-all active:scale-95 disabled:opacity-30 flex items-center justify-center gap-2"
+                      >
+                        Efectivo
+                      </button>
+                      <button 
+                        onClick={() => { playClick(); setDirectSalePaymentMethod('Transferencia'); }}
+                        disabled={directSaleProducts.length === 0 || isDirectSaleSaving}
+                        className="bg-blue-600 hover:bg-blue-700 text-white py-5 rounded-2xl font-black uppercase text-sm shadow-xl shadow-blue-100 transition-all active:scale-95 disabled:opacity-30 flex items-center justify-center gap-2"
+                      >
+                        Transfer
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="space-y-4 animate-in fade-in zoom-in-95 duration-200">
+                      <div className="p-4 bg-amber-50 rounded-2xl border border-amber-100">
+                        <div className="flex justify-between items-center mb-4">
+                          <span className="text-[10px] font-black text-amber-700 uppercase tracking-widest">Pago: {directSalePaymentMethod}</span>
+                          <button onClick={() => setDirectSalePaymentMethod(null)} className="text-amber-400 hover:text-amber-600">
+                            <X size={16} />
+                          </button>
+                        </div>
+
+                        {directSalePaymentMethod === 'Transferencia' && (
+                          <div className="space-y-4">
+                            {directSalePhoto ? (
+                              <div className="relative">
+                                <img src={directSalePhoto} alt="Comprobante" className="w-full h-32 object-cover rounded-xl shadow-md" />
+                                <button 
+                                  onClick={() => setDirectSalePhoto(null)} 
+                                  className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 shadow-lg"
+                                >
+                                  <X size={14} />
+                                </button>
+                              </div>
+                            ) : (
+                              <button 
+                                onClick={() => directFileInputRef.current?.click()}
+                                className="w-full py-4 bg-blue-50 text-blue-600 border-2 border-dashed border-blue-200 rounded-xl font-bold flex flex-col items-center gap-2 hover:bg-blue-100 transition-colors"
+                              >
+                                <Camera size={24} />
+                                <span className="text-[10px] uppercase">Adjuntar o Tomar Comprobante</span>
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </div>
+
+                      <button 
+                        onClick={() => handleProcessDirectSale(directSalePaymentMethod)}
+                        disabled={isDirectSaleSaving || (directSalePaymentMethod === 'Transferencia' && !directSalePhoto)}
+                        className="w-full bg-slate-900 hover:bg-black text-white py-5 rounded-2xl font-black uppercase text-base shadow-2xl transition-all active:scale-95 disabled:opacity-30 disabled:pointer-events-none flex items-center justify-center gap-3"
+                      >
+                        {isDirectSaleSaving ? (
+                          <RotateCcw className="animate-spin" size={24} />
+                        ) : (
+                          <>
+                            <Printer size={24} />
+                            <span>Confirmar y Ticket</span>
+                          </>
+                        )}
+                      </button>
+                      
+                      <button 
+                        onClick={() => setDirectSalePaymentMethod(null)}
+                        className="w-full py-2 text-slate-400 font-bold uppercase text-[10px] tracking-widest"
+                      >
+                        Cancelar Pago
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       )}

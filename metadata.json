@@ -1,5 +1,7 @@
 {
-  "name": "",
-  "description": "",
-  "requestFramePermissions": []
+  "name": "Motel Poseidón - Sistema de Gestión",
+  "description": "Sistema integral de gestión para el Motel Poseidón, incluyendo control de habitaciones, inventario, gastos, novedades y facturación.",
+  "requestFramePermissions": [
+    "camera"
+  ]
 }

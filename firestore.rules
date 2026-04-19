@@ -82,5 +82,10 @@ service cloud.firestore {
     match /settings/{settingId} {
       allow read, write: if true;
     }
+
+    // Incidents (Novedades)
+    match /incidents/{incidentId} {
+      allow read, write: if true;
+    }
   }
 }
