@@ -1,0 +1,169 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // -------------------------------------------------------------------------
+    // GLOBAL HELPERS
+    // -------------------------------------------------------------------------
+    
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && 
+        get(/databases/$(database)/documents/app_users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    // Checks if the user has an active shift
+    // We expect 'shiftId' to be present in the document data
+    function hasActiveShift(data) {
+      return isSignedIn() && 
+             data.shiftId != null && 
+             get(/databases/$(database)/documents/shifts/$(data.shiftId)).data.status == 'active';
+    }
+
+    // -------------------------------------------------------------------------
+    // CATCH-ALL DENY
+    // -------------------------------------------------------------------------
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // -------------------------------------------------------------------------
+    // app_users
+    // -------------------------------------------------------------------------
+    match /app_users/{userId} {
+      // Everyone needs to read users for auth context and dashboard displays
+      allow read: if isSignedIn();
+      
+      // Creating a user (registration or admin creation)
+      allow create: if isSignedIn(); 
+      
+      // Only admins can modify roles or delete users
+      // Users can modify their own non-sensitive data if needed (e.g. name)
+      allow update: if isAdmin() || (isOwner(userId) && !incoming().diff(existing()).affectedKeys().hasAny(['role', 'active', 'isAdmin']));
+      allow delete: if isAdmin();
+    }
+
+    // -------------------------------------------------------------------------
+    // rooms
+    // -------------------------------------------------------------------------
+    match /rooms/{roomId} {
+      allow read: if isSignedIn();
+      // Only admins can create/delete rooms
+      allow create, delete: if isAdmin();
+      // Hosts can update rooms if they have an active session/shift
+      allow update: if isAdmin() || isSignedIn(); 
+    }
+
+    // -------------------------------------------------------------------------
+    // tickets
+    // -------------------------------------------------------------------------
+    match /tickets/{ticketId} {
+      // Admins read all, hosts read theirs
+      allow list: if isAdmin() || (isSignedIn() && resource.data.hostId == request.auth.uid);
+      allow get: if isAdmin() || (isSignedIn() && resource.data.hostId == request.auth.uid);
+      
+      // Must have active shift to create a ticket (income)
+      allow create: if isAdmin() || (isSignedIn() && hasActiveShift(incoming()));
+      
+      // Tickets are generally immutable, only admins can delete or fix
+      allow update, delete: if isAdmin();
+    }
+
+    // -------------------------------------------------------------------------
+    // expenses
+    // -------------------------------------------------------------------------
+    match /expenses/{expenseId} {
+      allow list: if isAdmin() || (isSignedIn() && resource.data.hostId == request.auth.uid);
+      allow get: if isAdmin() || (isSignedIn() && resource.data.hostId == request.auth.uid);
+      
+      // Must have active shift to register expense
+      allow create: if isAdmin() || (isSignedIn() && hasActiveShift(incoming()));
+      
+      // Only admins can edit or delete expenses after creation
+      allow update, delete: if isAdmin();
+    }
+
+    // -------------------------------------------------------------------------
+    // shifts
+    // -------------------------------------------------------------------------
+    match /shifts/{shiftId} {
+      allow read: if isSignedIn();
+      // Anyone signed in can start a shift
+      allow create: if isSignedIn();
+      // Only the owner of the shift or admin can close it
+      allow update: if isAdmin() || (isSignedIn() && existing().hostId == request.auth.uid);
+      allow delete: if isAdmin();
+    }
+
+    // -------------------------------------------------------------------------
+    // reservations
+    // -------------------------------------------------------------------------
+    match /reservations/{resId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn();
+      allow update: if isSignedIn();
+      allow delete: if isAdmin();
+    }
+
+    // -------------------------------------------------------------------------
+    // products (Inventory)
+    // -------------------------------------------------------------------------
+    match /products/{prodId} {
+      allow read: if isSignedIn();
+      // Admins manage inventory, hosts can update stock when selling
+      allow create, delete: if isAdmin();
+      allow update: if isSignedIn(); 
+    }
+
+    // -------------------------------------------------------------------------
+    // incidents (Novedades)
+    // -------------------------------------------------------------------------
+    match /incidents/{incidentId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn();
+      // Only admins resolve or delete
+      allow update, delete: if isAdmin();
+    }
+
+    // -------------------------------------------------------------------------
+    // notifications, logs, resets, settings, promos
+    // -------------------------------------------------------------------------
+    match /notifications/{id} {
+      allow read, write: if isSignedIn();
+    }
+    match /logs/{id} {
+      allow read: if isAdmin();
+      allow create: if isSignedIn();
+    }
+    match /resets/{id} {
+      allow read, write: if isAdmin();
+    }
+    match /settings/{id} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+    match /promos/{id} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+  }
+}
