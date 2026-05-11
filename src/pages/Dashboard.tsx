@@ -237,13 +237,9 @@ export default function Dashboard() {
 
   useEffect(() => {
     const seedProducts = async () => {
-      // Only seed if not already done in this session or if forced
-      const isSeeded = localStorage.getItem('poseidon_products_seeded');
-      if (isSeeded) return;
-
       const productsSnap = await getDocs(collection(db, 'products'));
       
-      if (productsSnap.empty) {
+      if (productsSnap.empty || productsSnap.size < 5) {
         const requiredServices = [
           { name: "Servicio Base", price: 60000, stock: 999, category: "Servicios" },
           { name: "Hora Adicional", price: 20000, stock: 999, category: "Servicios" },
@@ -280,37 +276,43 @@ export default function Dashboard() {
         ];
 
         const allToSeed = [...requiredServices, ...initialProducts];
+        const existingNames = productsSnap.docs.map(doc => doc.data().name);
+        
         for (const prod of allToSeed) {
-          await addDoc(collection(db, 'products'), prod);
+          if (!existingNames.includes(prod.name)) {
+            await addDoc(collection(db, 'products'), prod);
+          }
         }
       }
-      
-      localStorage.setItem('poseidon_products_seeded', 'true');
     };
     seedProducts();
   }, []);
 
   useEffect(() => {
     const unsubscribe = onSnapshot(collection(db, 'rooms'), async (snapshot) => {
-      if (snapshot.empty) {
+      const roomsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Room));
+      
+      if (roomsData.length < 5) {
+        const existingIds = roomsData.map(r => r.id);
         for (let i = 1; i <= 5; i++) {
-          await setDoc(doc(db, 'rooms', i.toString()), {
-            id: i.toString(),
-            name: `Habitación ${i}`,
-            status: 'Libre',
-            startTime: null,
-            endTime: null,
-            persons: 2,
-            services: [],
-            products: [],
-            total: getBasePrice(),
-            basePrice: getBasePrice(),
-            currentHostId: null,
-            currentHostName: null
-          });
+          if (!existingIds.includes(i.toString())) {
+            await setDoc(doc(db, 'rooms', i.toString()), {
+              id: i.toString(),
+              name: `Habitación ${i}`,
+              status: 'Libre',
+              startTime: null,
+              endTime: null,
+              persons: 2,
+              services: [],
+              products: [],
+              total: getBasePrice(),
+              basePrice: getBasePrice(),
+              currentHostId: null,
+              currentHostName: null
+            });
+          }
         }
       } else {
-        const roomsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Room));
         roomsData.sort((a, b) => parseInt(a.id) - parseInt(b.id));
         setRooms(roomsData);
       }
