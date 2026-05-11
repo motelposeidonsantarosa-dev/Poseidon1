@@ -782,6 +782,19 @@ export default function Dashboard() {
     }
   };
 
+  const handleDeleteRoom = async (roomId: string) => {
+    playClick();
+    if (window.confirm('¿Seguro que deseas eliminar esta habitación?')) {
+      try {
+        await deleteDoc(doc(db, 'rooms', roomId));
+        playSuccess();
+      } catch (err) {
+        playError();
+        console.error(err);
+      }
+    }
+  };
+
   if (loading) return (
     <div className="fixed inset-0 bg-white flex flex-col items-center justify-center">
       <div className="text-7xl animate-spin drop-shadow-2xl mb-4">🔱</div>
@@ -916,19 +929,34 @@ export default function Dashboard() {
                       {room.name}
                     </h2>
                     {appUser?.role === 'admin' && (
-                      <button 
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          playClick();
-                          setEditingRoom(room);
-                          setEditRoomName(room.name);
-                        }}
-                        className="p-1 sm:p-2 bg-white/20 hover:bg-white/40 rounded-full transition-colors"
-                      >
-                        <Edit2 size={10} className="sm:hidden lg:block lg:w-3 lg:h-3" />
-                        <Edit2 size={18} className="hidden sm:block lg:hidden" />
-                      </button>
+                      <div className="flex items-center gap-1">
+                        <button 
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            playClick();
+                            setEditingRoom(room);
+                            setEditRoomName(room.name);
+                          }}
+                          className="p-1 sm:p-2 bg-white/20 hover:bg-white/40 rounded-full transition-colors"
+                          title="Editar Nombre"
+                        >
+                          <Edit2 size={10} className="sm:hidden lg:block lg:w-3 lg:h-3" />
+                          <Edit2 size={18} className="hidden sm:block lg:hidden" />
+                        </button>
+                        <button 
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            handleDeleteRoom(room.id);
+                          }}
+                          className="p-1 sm:p-2 bg-white/20 hover:bg-red-500 hover:text-white rounded-full transition-colors"
+                          title="Eliminar Habitación"
+                        >
+                          <Trash2 size={10} className="sm:hidden lg:block lg:w-3 lg:h-3" />
+                          <Trash2 size={18} className="hidden sm:block lg:hidden" />
+                        </button>
+                      </div>
                     )}
                   </div>
                   <span className="inline-block px-1.5 sm:px-3 py-0.5 sm:py-1 rounded-full text-[7px] sm:text-sm lg:text-[7px] xl:text-[10px] font-bold mt-1 sm:mt-2 lg:mt-1 bg-black/20 backdrop-blur-sm uppercase tracking-wider">
