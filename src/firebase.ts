@@ -1,7 +1,10 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
-import { initializeFirestore, enableMultiTabIndexedDbPersistence, CACHE_SIZE_UNLIMITED } from 'firebase/firestore';
+import { initializeFirestore, enableMultiTabIndexedDbPersistence, CACHE_SIZE_UNLIMITED, setLogLevel } from 'firebase/firestore';
 import firebaseConfig from '../firebase-applet-config.json';
+
+// Suppress harmless 'update time in the future' warnings from Firestore
+setLogLevel('error');
 
 const app = initializeApp(firebaseConfig);
 

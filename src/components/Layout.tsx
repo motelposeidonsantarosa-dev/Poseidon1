@@ -355,6 +355,13 @@ export default function Layout() {
           );
         })}
         <button
+          onClick={handleChangeMyPin}
+          className="flex flex-col items-center gap-1 p-2 text-slate-400 shrink-0 min-w-[70px] sm:min-w-[90px] [@media(max-height:600px)_and_(max-width:960px)_and_(orientation:landscape)]:min-w-0 [@media(max-height:600px)_and_(max-width:960px)_and_(orientation:landscape)]:w-full"
+        >
+          <KeyRound size={24} className="shrink-0" />
+          <span className="text-[10px] font-black uppercase tracking-tighter text-center leading-tight">Clave</span>
+        </button>
+        <button
           onClick={toggleFullscreen}
           className="flex flex-col items-center gap-1 p-2 text-slate-400 shrink-0 min-w-[70px] sm:min-w-[90px] [@media(max-height:600px)_and_(max-width:960px)_and_(orientation:landscape)]:min-w-0 [@media(max-height:600px)_and_(max-width:960px)_and_(orientation:landscape)]:w-full"
         >

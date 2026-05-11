@@ -39,7 +39,7 @@ export default function Login() {
     <div className="min-h-screen bg-slate-900 flex flex-col justify-center items-center p-4 relative">
       <button 
         onClick={() => { playClick(); navigate('/'); }}
-        className="absolute top-[max(1.5rem,env(safe-area-inset-top))] left-4 sm:left-8 flex items-center gap-2 text-slate-400 hover:text-white transition-colors font-bold uppercase tracking-widest text-[10px] sm:top-8 mt-2"
+        className="absolute top-[max(3rem,env(safe-area-inset-top))] mt-6 left-4 sm:left-8 flex items-center gap-2 text-slate-400 hover:text-white transition-colors font-bold uppercase tracking-widest text-[10px] sm:top-8 sm:mt-2"
       >
         <ArrowLeft size={16} /> Volver al Inicio
       </button>

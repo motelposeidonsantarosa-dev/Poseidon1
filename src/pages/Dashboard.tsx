@@ -65,6 +65,7 @@ export default function Dashboard() {
   const [newRoomName, setNewRoomName] = useState('');
   const [editingRoom, setEditingRoom] = useState<Room | null>(null);
   const [editRoomName, setEditRoomName] = useState('');
+  const [roomToDelete, setRoomToDelete] = useState<string | null>(null);
   const [showStartShiftModal, setShowStartShiftModal] = useState(false);
   const [isNavigating, setIsNavigating] = useState(false);
 
@@ -291,34 +292,10 @@ export default function Dashboard() {
   useEffect(() => {
     const unsubscribe = onSnapshot(collection(db, 'rooms'), async (snapshot) => {
       const roomsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Room));
-      
-      if (roomsData.length < 5) {
-        const existingIds = roomsData.map(r => r.id);
-        for (let i = 1; i <= 5; i++) {
-          if (!existingIds.includes(i.toString())) {
-            await setDoc(doc(db, 'rooms', i.toString()), {
-              id: i.toString(),
-              name: `Habitación ${i}`,
-              status: 'Libre',
-              startTime: null,
-              endTime: null,
-              persons: 2,
-              services: [],
-              products: [],
-              total: getBasePrice(),
-              basePrice: getBasePrice(),
-              currentHostId: null,
-              currentHostName: null
-            });
-          }
-        }
-      } else {
-        roomsData.sort((a, b) => parseInt(a.id) - parseInt(b.id));
-        setRooms(roomsData);
-      }
+      roomsData.sort((a, b) => parseInt(a.id) - parseInt(b.id));
+      setRooms(roomsData);
       setLoading(false);
     });
-
     return () => unsubscribe();
   }, []);
 
@@ -739,12 +716,18 @@ export default function Dashboard() {
     }
   };
 
-  const handleAddRoom = async () => {
+  const handleAddRoom = async (e?: any) => {
+    if (e && e.preventDefault) e.preventDefault();
     playClick();
     if (!newRoomName.trim()) return;
+    
+    // Close modal immediately to ensure it closes
+    setShowAddRoom(false);
+    
     try {
       const newId = (rooms.length > 0 ? Math.max(...rooms.map(r => parseInt(r.id))) + 1 : 1).toString();
-      await setDoc(doc(db, 'rooms', newId), {
+      // fire-and-forget
+      setDoc(doc(db, 'rooms', newId), {
         id: newId,
         name: newRoomName,
         status: 'Libre',
@@ -754,12 +737,12 @@ export default function Dashboard() {
         services: [],
         products: [],
         total: getBasePrice(),
+        basePrice: getBasePrice(),
         currentHostId: null,
         currentHostName: null
-      });
+      }).catch(console.error);
       playSuccess();
       setNewRoomName('');
-      setShowAddRoom(false);
     } catch (err) {
       playError();
       console.error(err);
@@ -770,9 +753,9 @@ export default function Dashboard() {
     playClick();
     if (!editingRoom || !editRoomName.trim()) return;
     try {
-      await updateDoc(doc(db, 'rooms', editingRoom.id), {
+      updateDoc(doc(db, 'rooms', editingRoom.id), {
         name: editRoomName
-      });
+      }).catch(console.error);
       playSuccess();
       setEditingRoom(null);
       setEditRoomName('');
@@ -784,14 +767,23 @@ export default function Dashboard() {
 
   const handleDeleteRoom = async (roomId: string) => {
     playClick();
-    if (window.confirm('¿Seguro que deseas eliminar esta habitación?')) {
-      try {
-        await deleteDoc(doc(db, 'rooms', roomId));
-        playSuccess();
-      } catch (err) {
-        playError();
-        console.error(err);
-      }
+    setRoomToDelete(roomId);
+  };
+
+  const confirmDeleteRoom = async (e?: any) => {
+    if (e && e.preventDefault) e.preventDefault();
+    if (!roomToDelete) return;
+    
+    // Grab ID and close modal immediately
+    const targetRoom = roomToDelete;
+    setRoomToDelete(null);
+    
+    try {
+      deleteDoc(doc(db, 'rooms', targetRoom)).catch(console.error);
+      playSuccess();
+    } catch (err) {
+      playError();
+      console.error(err);
     }
   };
 
@@ -1452,6 +1444,40 @@ export default function Dashboard() {
           </div>
         </div>
       )}
+      {roomToDelete && (
+        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl p-6 sm:p-8 w-full max-w-sm border border-slate-100 shadow-2xl relative overflow-hidden text-center">
+            <div className="absolute top-0 inset-x-0 h-4 bg-gradient-to-r from-red-500 to-rose-600" />
+            <div className="w-20 h-20 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-6">
+              <Trash2 size={40} className="text-red-500 ml-1" />
+            </div>
+            
+            <h3 className="text-slate-900 font-black text-xl mb-3 tracking-tight">
+              ¿Eliminar Habitación?
+            </h3>
+            
+            <p className="text-slate-500 text-xs font-medium mb-8 leading-relaxed">
+              Esta acción no se puede deshacer. Todos los datos de la habitación serán borrados permanentemente.
+            </p>
+
+            <div className="flex gap-3">
+              <button 
+                onClick={() => { playClick(); setRoomToDelete(null); }}
+                className="flex-1 py-4 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-2xl transition-colors uppercase tracking-widest text-[10px]"
+              >
+                Cancelar
+              </button>
+              <button 
+                onClick={confirmDeleteRoom}
+                className="flex-1 py-4 bg-red-500 hover:bg-red-600 text-white font-bold rounded-2xl transition-all shadow-lg shadow-red-500/30 uppercase tracking-widest text-[10px] active:scale-95"
+              >
+                Eliminar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
