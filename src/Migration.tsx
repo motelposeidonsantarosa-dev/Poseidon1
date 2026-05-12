@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import { collection, getDocs, doc, setDoc } from 'firebase/firestore';
+import { collection, getDocs, doc, writeBatch } from 'firebase/firestore';
 import { db } from './firebase';
 import { useAuth } from './contexts/AuthContext';
 
@@ -67,13 +67,24 @@ export function Migration() {
           
           addLog(`Subiendo ${docs.length} registros a ${col}...`);
           let successCount = 0;
-          for (const d of docs) {
-            try {
+          
+          // Firebase limit is 500 writes per batch
+          const CHUNK_SIZE = 450;
+          for (let i = 0; i < docs.length; i += CHUNK_SIZE) {
+            const chunk = docs.slice(i, i + CHUNK_SIZE);
+            const batch = writeBatch(db);
+            
+            for (const d of chunk) {
               const { id, ...docData } = d;
-              await setDoc(doc(db, col, id), docData);
-              successCount++;
+              batch.set(doc(db, col, id), docData);
+            }
+            
+            try {
+              await batch.commit();
+              successCount += chunk.length;
+              addLog(`Progreso ${col}: ${successCount}/${docs.length}`);
             } catch (err: any) {
-              addLog(`Error al subir ${id} en ${col}: ${err.message}`);
+              addLog(`Error al subir lote en ${col}: ${err.message}`);
             }
           }
           addLog(`Completado ${col}: ${successCount} registros subidos.`);
