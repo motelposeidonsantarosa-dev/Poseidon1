@@ -177,33 +177,14 @@ export default function Users() {
         <h1 className="text-xl sm:text-2xl lg:text-xl font-bold text-slate-900 flex items-center gap-2 sm:gap-3">
           <UsersIcon size={24} className="lg:w-6 lg:h-6" /> Gestión de Usuarios
         </h1>
-        <div className="flex gap-2">
-          {appUser?.role === 'admin' && (
-            <button 
-              onClick={() => { 
-                playClick();
-                if(window.confirm('¿Estás seguro de restablecer todos los PINs a 1234?')) {
-                  users.forEach(u => {
-                    updateDoc(doc(db, 'app_users', u.id), { pin: '1234' }).catch(console.error);
-                  });
-                  playSuccess();
-                  alert('PINs restablecidos a 1234');
-                }
-              }}
-              className="bg-yellow-600 hover:bg-yellow-700 text-white px-3 py-2 sm:px-4 sm:py-2.5 rounded-xl text-[10px] sm:text-xs lg:text-[11px] font-bold shadow-sm transition-transform hover:scale-105 active:scale-95"
-            >
-              Reset ALL (1234)
-            </button>
-          )}
-          {appUser?.role === 'admin' && (
-            <button 
-              onClick={() => { playClick(); setShowAddUser(true); }}
-              className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 sm:px-4 sm:py-2.5 rounded-xl text-[10px] sm:text-xs lg:text-[11px] font-bold shadow-sm transition-transform hover:scale-105 active:scale-95"
-            >
-              + Añadir
-            </button>
-          )}
-        </div>
+        {appUser?.role === 'admin' && (
+          <button 
+            onClick={() => { playClick(); setShowAddUser(true); }}
+            className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 sm:px-4 sm:py-2.5 rounded-xl text-[10px] sm:text-xs lg:text-[11px] font-bold shadow-sm transition-transform hover:scale-105 active:scale-95"
+          >
+            + Añadir
+          </button>
+        )}
       </div>
       
       <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">

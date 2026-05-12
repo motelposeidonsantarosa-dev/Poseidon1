@@ -550,7 +550,9 @@ export default function RoomDetail() {
       setShowNoShiftModal(true);
       return;
     }
-    await updateDoc(doc(db, 'rooms', room.id), {
+    
+    // Fire-and-forget update
+    updateDoc(doc(db, 'rooms', room.id), {
       status: 'Libre',
       startTime: null,
       endTime: null,
@@ -561,10 +563,11 @@ export default function RoomDetail() {
       basePrice: getServicePrice('Servicio Base', 60000),
       currentHostId: null,
       currentHostName: null
-    });
+    }).catch(e => console.error("Error setting free:", e));
+    
     playSuccess();
     setIsNavigating(true);
-    setTimeout(() => navigate('/dashboard'), 300);
+    navigate('/dashboard');
   };
 
   let timeLeftStr = '';
