@@ -80,11 +80,42 @@ export default function Dashboard() {
   const directFileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    const unsubscribe = onSnapshot(collection(db, 'products'), (snapshot) => {
+    const unsubscribe = onSnapshot(collection(db, 'products'), async (snapshot) => {
       const prods = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as any));
       // Duplicate prevention
       const unique = Array.from(new Map(prods.map((item: any) => [item.name, item])).values());
       setInventory(unique);
+
+      if (snapshot.empty || snapshot.size < 5) {
+        const requiredServices = [
+          { name: "Servicio Base", price: 60000, stock: 999, category: "Servicios" },
+          { name: "Hora Adicional", price: 20000, stock: 999, category: "Servicios" },
+          { name: "Persona Adicional", price: 20000, stock: 999, category: "Servicios" },
+          { name: "Jacuzzi", price: 30000, stock: 999, category: "Servicios" },
+          { name: "Sauna", price: 20000, stock: 999, category: "Servicios" },
+          { name: "Turco", price: 20000, stock: 999, category: "Servicios" },
+          { name: "Valor Reserva", price: 40000, stock: 999, category: "Servicios" }
+        ];
+        const initialProducts = [
+          { name: "Cerveza Andina Lata", price: 6000, stock: 50, category: "Bebidas" },
+          { name: "Cerveza Águila Negra", price: 6000, stock: 50, category: "Bebidas" },
+          { name: "Cerveza Corona", price: 8000, stock: 50, category: "Bebidas" },
+          { name: "Cerveza Budweiser", price: 6000, stock: 50, category: "Bebidas" },
+          { name: "Cerveza Costeña", price: 6000, stock: 50, category: "Bebidas" },
+          { name: "Cerveza Póker", price: 6000, stock: 50, category: "Bebidas" },
+          { name: "Smirnoff", price: 14000, stock: 50, category: "Bebidas" },
+          { name: "Aguardiente 200 ml", price: 40000, stock: 50, category: "Bebidas" },
+          { name: "Champaña JP Chenet Lata", price: 17000, stock: 50, category: "Bebidas" },
+          { name: "Champaña JP Chenet 200 ml", price: 35000, stock: 50, category: "Bebidas" }
+        ];
+        const allToSeed = [...requiredServices, ...initialProducts];
+        const existingNames = prods.map((doc: any) => doc.name);
+        for (const prod of allToSeed) {
+          if (!existingNames.includes(prod.name)) {
+            addDoc(collection(db, 'products'), prod).catch(console.error);
+          }
+        }
+      }
     }, (error) => {
       handleFirestoreError(error, OperationType.GET, 'products');
     });
@@ -259,65 +290,10 @@ export default function Dashboard() {
   }, [appUser]);
 
   useEffect(() => {
-    const seedProducts = async () => {
-      const productsSnap = await getDocs(collection(db, 'products'));
-      
-      if (productsSnap.empty || productsSnap.size < 5) {
-        const requiredServices = [
-          { name: "Servicio Base", price: 60000, stock: 999, category: "Servicios" },
-          { name: "Hora Adicional", price: 20000, stock: 999, category: "Servicios" },
-          { name: "Persona Adicional", price: 20000, stock: 999, category: "Servicios" },
-          { name: "Jacuzzi", price: 30000, stock: 999, category: "Servicios" },
-          { name: "Sauna", price: 20000, stock: 999, category: "Servicios" },
-          { name: "Turco", price: 20000, stock: 999, category: "Servicios" },
-          { name: "Valor Reserva", price: 40000, stock: 999, category: "Servicios" }
-        ];
-
-        const initialProducts = [
-          { name: "Cerveza Andina Lata", price: 6000, stock: 50, category: "Bebidas" },
-          { name: "Cerveza Águila Negra", price: 6000, stock: 50, category: "Bebidas" },
-          { name: "Cerveza Corona", price: 8000, stock: 50, category: "Bebidas" },
-          { name: "Cerveza Budweiser", price: 6000, stock: 50, category: "Bebidas" },
-          { name: "Cerveza Costeña", price: 6000, stock: 50, category: "Bebidas" },
-          { name: "Cerveza Póker", price: 6000, stock: 50, category: "Bebidas" },
-          { name: "Smirnoff", price: 14000, stock: 50, category: "Bebidas" },
-          { name: "Aguardiente 200 ml", price: 40000, stock: 50, category: "Bebidas" },
-          { name: "Champaña JP Chenet Lata", price: 17000, stock: 50, category: "Bebidas" },
-          { name: "Champaña JP Chenet 200 ml", price: 35000, stock: 50, category: "Bebidas" },
-          { name: "Champaña JP Chenet Grande", price: 110000, stock: 50, category: "Bebidas" },
-          { name: "Botella de Agua", price: 2000, stock: 50, category: "Bebidas" },
-          { name: "Gatorade", price: 6000, stock: 50, category: "Bebidas" },
-          { name: "Soda", price: 4000, stock: 50, category: "Bebidas" },
-          { name: "Electrolit", price: 12000, stock: 50, category: "Bebidas" },
-          { name: "Coca Cola", price: 4000, stock: 50, category: "Bebidas" },
-          { name: "Cola y Pola", price: 4000, stock: 50, category: "Bebidas" },
-          { name: "Jugo Hit", price: 3000, stock: 50, category: "Bebidas" },
-          { name: "Soda Hatsu", price: 6000, stock: 50, category: "Bebidas" },
-          { name: "Retardantes", price: 15000, stock: 50, category: "Sexshop" },
-          { name: "Lubricantes", price: 7000, stock: 50, category: "Sexshop" },
-          { name: "Condones", price: 5000, stock: 50, category: "Sexshop" }
-        ];
-
-        const allToSeed = [...requiredServices, ...initialProducts];
-        const existingNames = productsSnap.docs.map(doc => doc.data().name);
-        
-        for (const prod of allToSeed) {
-          if (!existingNames.includes(prod.name)) {
-            await addDoc(collection(db, 'products'), prod);
-          }
-        }
-      }
-    };
-    seedProducts();
-  }, []);
-
-  useEffect(() => {
-    const seedRooms = async () => {
-      const roomsSnap = await getDocs(collection(db, 'rooms'));
-      if (roomsSnap.empty) {
-        console.log("No rooms found in database. Seeding initial 5 rooms...");
+    const unsubscribe = onSnapshot(collection(db, 'rooms'), async (snapshot) => {
+      if (snapshot.empty) {
         for (let i = 1; i <= 5; i++) {
-          await setDoc(doc(db, 'rooms', i.toString()), {
+          setDoc(doc(db, 'rooms', i.toString()), {
             name: `Habitación ${i}`,
             status: 'Libre',
             startTime: null,
@@ -327,15 +303,9 @@ export default function Dashboard() {
             basePrice: 60000,
             services: [],
             products: []
-          });
+          }).catch(console.error);
         }
       }
-    };
-    seedRooms();
-  }, []);
-
-  useEffect(() => {
-    const unsubscribe = onSnapshot(collection(db, 'rooms'), async (snapshot) => {
       const roomsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Room));
       // Try to parse IDs as int to sort them numerically (1, 2, 3...) rather than alphabetically (1, 10, 2...)
       roomsData.sort((a, b) => {
@@ -841,28 +811,6 @@ export default function Dashboard() {
 
   return (
     <div className="max-w-7xl mx-auto">
-      {appUser?.role === 'admin' && (
-        <button 
-          onClick={() => {
-            playClick();
-            navigate('/migrate');
-          }}
-          className="mb-6 w-full bg-slate-900 border border-amber-400/50 text-amber-400 p-4 rounded-xl flex items-center justify-between shadow-[0_0_15px_rgba(251,191,36,0.3)] hover:shadow-[0_0_25px_rgba(251,191,36,0.5)] transition-all active:scale-95 group overflow-hidden relative"
-        >
-          <div className="absolute inset-0 bg-amber-400/10 skew-x-12 -translate-x-[150%] group-hover:translate-x-[150%] transition-transform duration-1000"></div>
-          <div className="flex items-center gap-3 relative z-10">
-            <div className="w-10 h-10 bg-amber-400/20 rounded-full flex items-center justify-center shrink-0">
-              <span className="text-xl">🚀</span>
-            </div>
-            <div className="text-left filter drop-shadow-[0_0_5px_rgba(251,191,36,0.5)]">
-              <h3 className="font-bold text-sm md:text-base">MIGRACIÓN A NUEVA BASE DE DATOS</h3>
-              <p className="text-xs md:text-sm opacity-80">Toca aquí para iniciar el copiado final de los datos.</p>
-            </div>
-          </div>
-          <PlayCircle size={24} className="opacity-50 group-hover:opacity-100 transition-opacity" />
-        </button>
-      )}
-
       {(isNavigating || isDirectSaleSaving) && (
         <div className="fixed inset-0 bg-white/60 backdrop-blur-sm z-[200] flex items-center justify-center">
           <div className="flex flex-col items-center gap-4">

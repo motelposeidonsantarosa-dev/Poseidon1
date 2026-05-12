@@ -61,6 +61,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           if (userLocalFallback) {
              // Oportunamente mostramos q el usuario está logueado mientras carga real de la base de datos
              setAppUser({...userLocalFallback, activeSessions: [savedSessionId]});
+             setLoading(false); // Unblock immediately for fluid perception
           }
         }
         
