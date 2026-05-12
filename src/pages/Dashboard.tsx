@@ -964,10 +964,7 @@ export default function Dashboard() {
               onClick={(e) => {
                 e.preventDefault();
                 playClick();
-                setIsNavigating(true);
-                setTimeout(() => {
-                  navigate(`/dashboard/room/${room.id}`);
-                }, 300);
+                navigate(`/dashboard/room/${room.id}`);
               }}
               className={cn(
                 "rounded-xl sm:rounded-2xl p-2 sm:p-3.5 lg:p-2 shadow-lg border-2 transition-all active:scale-95 flex flex-col h-full text-white min-h-[110px] sm:min-h-[160px] lg:min-h-[110px] xl:min-h-0 xl:aspect-square relative overflow-hidden",
