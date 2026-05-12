@@ -105,7 +105,13 @@ function AppRoutes() {
   );
 }
 
+import { Migration } from './Migration';
+
 export default function App() {
+  if (window.location.hash === '#migrate') {
+    return <Migration />;
+  }
+
   return (
     <AuthProvider>
       <BrowserRouter>
