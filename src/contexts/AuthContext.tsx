@@ -38,6 +38,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     let unsubscribeUser: (() => void) | null = null;
+    let unsubscribeUsersCollection: (() => void) | null = null;
 
     const initAuth = async () => {
       try {
@@ -66,25 +67,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
         
         // Cargar usuario real y app_users en paralelo (esto reduce MUCHO el tiempo de carga)
-        const [userDoc, usersSnap] = await Promise.allSettled([
-          (savedUserId && savedSessionId) ? getDoc(doc(db, 'app_users', savedUserId)) : Promise.resolve(null),
-          getDocs(collection(db, 'app_users'))
+        const [userDoc] = await Promise.allSettled([
+          (savedUserId && savedSessionId) ? getDoc(doc(db, 'app_users', savedUserId)) : Promise.resolve(null)
         ]);
 
         let finalUsers = [...DEFAULT_USERS];
 
-        if (usersSnap.status === 'fulfilled' && !usersSnap.value.empty) {
-          finalUsers = usersSnap.value.docs.map(d => ({ id: d.id, ...d.data() } as AppUser));
-          setUsers(finalUsers);
-        } else {
-           // Seed initial default users automatically so user has them right away
-           if (usersSnap.status === 'fulfilled' && usersSnap.value.empty) {
-              for (const u of DEFAULT_USERS) {
-                 setDoc(doc(db, 'app_users', u.id), u).catch(() => {});
-              }
-           }
-           setUsers(finalUsers);
-        }
+        let unsubscribeUsersCollection: (() => void) | null = null;
+        unsubscribeUsersCollection = onSnapshot(collection(db, 'app_users'), (snapshot) => {
+          if (!snapshot.empty) {
+            finalUsers = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as AppUser));
+            setUsers(finalUsers);
+          } else {
+             // Seed initial default users automatically so user has them right away
+             for (const u of DEFAULT_USERS) {
+                setDoc(doc(db, 'app_users', u.id), u).catch(() => {});
+             }
+             setUsers(finalUsers);
+          }
+        }, (error) => {
+          console.warn('Error listening to app_users', error);
+        });
 
         if (savedUserId && savedSessionId && userDoc.status === 'fulfilled' && userDoc.value && userDoc.value.exists()) {
             const userData = userDoc.value.data() as AppUser;
@@ -131,6 +134,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     initAuth();
     return () => {
       if (unsubscribeUser) unsubscribeUser();
+      if (unsubscribeUsersCollection) unsubscribeUsersCollection();
     };
   }, []);
 
