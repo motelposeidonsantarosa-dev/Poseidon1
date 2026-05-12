@@ -110,24 +110,38 @@ export default function Dashboard() {
   useEffect(() => {
     if (inventory.length === 0 || loading) return;
     
+    // Solo un procesador líder sincroniza los precios para evitar request bursts
+    const isProcessor = (appUser?.role === 'host' && activeShift?.hostId === appUser.id) || (appUser?.role === 'admin' && !globalActiveShift);
+    if (!isProcessor) return;
+    
     const currentBasePrice = getBasePrice();
     rooms.forEach(async (room) => {
       if (room.status === 'Libre' && (room.total !== currentBasePrice || room.basePrice !== currentBasePrice)) {
         try {
-          await updateDoc(doc(db, 'rooms', room.id), { 
-            total: currentBasePrice,
-            basePrice: currentBasePrice
-          });
+          // Re-test to avoid optimistic UI races
+          const rSnap = await getDoc(doc(db, 'rooms', room.id));
+          if(rSnap.exists() && rSnap.data().status === 'Libre' && rSnap.data().total !== currentBasePrice) {
+            await updateDoc(doc(db, 'rooms', room.id), { 
+              total: currentBasePrice,
+              basePrice: currentBasePrice
+            });
+          }
         } catch (e) {
           console.error("Error syncing room price:", e);
         }
       }
     });
-  }, [inventory, rooms, loading]);
+  }, [inventory, rooms, loading, appUser, activeShift, globalActiveShift]);
 
   useEffect(() => {
+    // Solo el Host activo procesa reservaciones automáticas para evitar carrera de peticiones de múltiples clientes.
+    // Si no hay host activo, lo procesa un admin.
+    const isProcessor = (appUser?.role === 'host' && activeShift?.hostId === appUser.id) || (appUser?.role === 'admin' && !globalActiveShift);
+    
+    if (!isProcessor) return;
+
     const checkReservations = async () => {
-      const nowMs = now.getTime();
+      const nowMs = new Date().getTime(); // Obtener timestamp en el momento en vez del 'now' variable que cambia cada segundo
       const staleReservations = reservations.filter(res => {
         if (res.status !== 'pending') return false;
         const resDate = parseISO(res.date);
@@ -137,6 +151,10 @@ export default function Dashboard() {
 
       for (const res of staleReservations) {
         try {
+          // Double check reservation status to avoid race condition if another client cancelled it a millisecond ago
+          const resSnap = await getDoc(doc(db, 'reservations', res.id));
+          if (!resSnap.exists() || resSnap.data().status !== 'pending') continue;
+
           // 1. Cancel Reservation
           await updateDoc(doc(db, 'reservations', res.id), { status: 'cancelled' });
 
@@ -181,9 +199,13 @@ export default function Dashboard() {
     };
 
     if (reservations.length > 0) {
+      // Usar setInterval local para chequear cada 30 segundos en vez de correr cada 1 segundo con la VDOM refresh.
+      const interval = setInterval(checkReservations, 30000);
+      // Ejecutar una vez al montar The Effect
       checkReservations();
+      return () => clearInterval(interval);
     }
-  }, [now, reservations]);
+  }, [reservations, appUser, activeShift, globalActiveShift]);
 
   useEffect(() => {
     audioRef.current = new Audio('https://actions.google.com/sounds/v1/alarms/beep_short.ogg');
@@ -290,9 +312,38 @@ export default function Dashboard() {
   }, []);
 
   useEffect(() => {
+    const seedRooms = async () => {
+      const roomsSnap = await getDocs(collection(db, 'rooms'));
+      if (roomsSnap.empty) {
+        console.log("No rooms found in database. Seeding initial 5 rooms...");
+        for (let i = 1; i <= 5; i++) {
+          await setDoc(doc(db, 'rooms', i.toString()), {
+            name: `Habitación ${i}`,
+            status: 'Libre',
+            startTime: null,
+            endTime: null,
+            persons: 2,
+            total: 60000,
+            basePrice: 60000,
+            services: [],
+            products: []
+          });
+        }
+      }
+    };
+    seedRooms();
+  }, []);
+
+  useEffect(() => {
     const unsubscribe = onSnapshot(collection(db, 'rooms'), async (snapshot) => {
       const roomsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Room));
-      roomsData.sort((a, b) => parseInt(a.id) - parseInt(b.id));
+      // Try to parse IDs as int to sort them numerically (1, 2, 3...) rather than alphabetically (1, 10, 2...)
+      roomsData.sort((a, b) => {
+        const idA = parseInt(a.id);
+        const idB = parseInt(b.id);
+        if(!isNaN(idA) && !isNaN(idB)) return idA - idB;
+        return a.name.localeCompare(b.name);
+      });
       setRooms(roomsData);
       setLoading(false);
     });
