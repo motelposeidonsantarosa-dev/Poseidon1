@@ -303,7 +303,7 @@ export default function Layout() {
           <button
             onClick={toggleFullscreen}
             className="w-full flex items-center justify-center lg:[@media(orientation:landscape)]:justify-start xl:justify-start gap-4 p-3 rounded-xl bg-slate-800 hover:bg-slate-700 transition-colors text-slate-300 mb-2 border border-slate-700/50"
-            title="Pantalla Completa"
+           
           >
             <Maximize size={20} className="shrink-0" />
             <span className="hidden lg:[@media(orientation:landscape)]:block xl:block text-[10px] font-bold uppercase tracking-wider">Pantalla Completa</span>
@@ -313,7 +313,7 @@ export default function Layout() {
             <button
               onClick={handleChangeMyPin}
               className="flex flex-col items-center justify-center gap-1 p-3 rounded-xl bg-slate-800 hover:bg-slate-700 transition-colors text-slate-300"
-              title="Cambiar Clave"
+             
             >
               <KeyRound size={20} />
               <span className="hidden lg:[@media(orientation:landscape)]:block xl:block text-[10px] font-bold uppercase">Clave</span>
@@ -321,7 +321,7 @@ export default function Layout() {
             <button
               onClick={handleLogout}
               className="flex flex-col items-center justify-center gap-1 p-3 rounded-xl bg-red-900/20 hover:bg-red-900/40 transition-colors text-red-400"
-              title="Cerrar Sesión"
+             
             >
               <LogOut size={20} />
               <span className="hidden lg:[@media(orientation:landscape)]:block xl:block text-[10px] font-bold uppercase">Salir</span>

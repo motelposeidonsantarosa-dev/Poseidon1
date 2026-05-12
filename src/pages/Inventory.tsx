@@ -171,57 +171,62 @@ export default function Inventory() {
     setEditForm({ ...room, images: normalizedImages });
   };
 
-  const handleSaveRoom = async () => {
+  const handleSaveRoom = (e?: any) => {
+    if (e && e.preventDefault) e.preventDefault();
     playClick();
     if (!editingId) return;
-    setIsSaving(true);
-    try {
-      const { id, ...dataToSave } = editForm as any;
-      // Force clean update: images is the new array, image is removed from Firestore
-      await updateDoc(doc(db, 'rooms', editingId), {
+    
+    // Grab id and data, then reset state immediately
+    const targetId = editingId;
+    const { id, ...dataToSave } = editForm as any;
+    setEditingId(null);
+    setEditForm({});
+
+    updateDoc(doc(db, 'rooms', targetId), {
+      ...dataToSave,
+      image: deleteField(),
+      updatedAt: new Date().toISOString()
+    }).then(() => {
+      playSuccess();
+    }).catch(err => {
+      playError();
+      handleFirestoreError(err, OperationType.UPDATE, `rooms/${targetId}`);
+    });
+  };
+
+  const handleSaveInfo = (e?: any) => {
+    if (e && e.preventDefault) e.preventDefault();
+    playClick();
+    if (!editForm.images || editForm.images.length === 0) return alert("Debes subir al menos una imagen");
+    
+    const { id, image, ...dataToSave } = editForm as any;
+    
+    if (editingId) {
+      const targetId = editingId;
+      setEditingId(null);
+      setEditForm({});
+      updateDoc(doc(db, 'promos', targetId), {
         ...dataToSave,
         image: deleteField(),
         updatedAt: new Date().toISOString()
+      }).then(() => {
+        playSuccess();
+      }).catch(err => {
+        playError();
+        handleFirestoreError(err, OperationType.UPDATE, 'promos');
       });
-      setEditingId(null);
-      setEditForm({});
-      playSuccess();
-    } catch (err) {
-      playError();
-      handleFirestoreError(err, OperationType.UPDATE, `rooms/${editingId}`);
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const handleSaveInfo = async () => {
-    playClick();
-    if (!editForm.images || editForm.images.length === 0) return alert("Debes subir al menos una imagen");
-    setIsSaving(true);
-    try {
-      const { id, image, ...dataToSave } = editForm as any;
-      
-      if (editingId) {
-        await updateDoc(doc(db, 'promos', editingId), {
-          ...dataToSave,
-          image: deleteField(),
-          updatedAt: new Date().toISOString()
-        });
-      } else {
-        await addDoc(collection(db, 'promos'), {
-          ...dataToSave,
-          createdAt: new Date().toISOString()
-        });
-      }
-      setEditingId(null);
+    } else {
       setIsAdding(false);
       setEditForm({});
-      playSuccess();
-    } catch (err) {
-      playError();
-      handleFirestoreError(err, editingId ? OperationType.UPDATE : OperationType.CREATE, 'promos');
-    } finally {
-      setIsSaving(false);
+      addDoc(collection(db, 'promos'), {
+        ...dataToSave,
+        createdAt: new Date().toISOString()
+      }).then(() => {
+        playSuccess();
+      }).catch(err => {
+        playError();
+        handleFirestoreError(err, OperationType.CREATE, 'promos');
+      });
     }
   };
 
@@ -241,39 +246,46 @@ export default function Inventory() {
     setEditForm({ ...product, images: normalizedImages });
   };
 
-  const handleSave = async () => {
+  const handleSave = async (e?: any) => {
+    if (e && e.preventDefault) e.preventDefault();
     playClick();
-    setIsSaving(true);
-    try {
-      const { id, image, ...dataToSave } = editForm as any;
-      
-      if (editingId) {
-        await updateDoc(doc(db, 'products', editingId), {
-          ...dataToSave,
-          image: deleteField(),
-          updatedAt: new Date().toISOString()
-        });
-        setEditingId(null);
-      } else if (isAdding) {
-        // Prevent accidental duplicates if name already exists
-        const exists = products.find(p => p.name.toLowerCase() === (dataToSave.name || '').toLowerCase());
-        if (exists && !window.confirm(`Ya existe un producto con el nombre "${dataToSave.name}". ¿Desea crearlo de todas formas?`)) {
-          setIsSaving(false);
-          return;
-        }
-        await addDoc(collection(db, 'products'), {
-          ...dataToSave,
-          createdAt: new Date().toISOString()
-        });
-        setIsAdding(false);
-      }
-      playSuccess();
+    
+    // Grab data
+    const { id, image, ...dataToSave } = editForm as any;
+    
+    if (editingId) {
+      const targetId = editingId;
+      setEditingId(null);
       setEditForm({});
-    } catch (err) {
-      playError();
-      handleFirestoreError(err, editingId ? OperationType.UPDATE : OperationType.CREATE, 'products');
-    } finally {
-      setIsSaving(false);
+      
+      updateDoc(doc(db, 'products', targetId), {
+        ...dataToSave,
+        image: deleteField(),
+        updatedAt: new Date().toISOString()
+      }).then(() => {
+        playSuccess();
+      }).catch(err => {
+        playError();
+        handleFirestoreError(err, OperationType.UPDATE, 'products');
+      });
+    } else if (isAdding) {
+      // Prevent accidental duplicates if name already exists
+      const exists = products.find(p => p.name.toLowerCase() === (dataToSave.name || '').toLowerCase());
+      if (exists && !window.confirm(`Ya existe un producto con el nombre "${dataToSave.name}". ¿Desea crearlo de todas formas?`)) {
+        return;
+      }
+      setIsAdding(false);
+      setEditForm({});
+      
+      addDoc(collection(db, 'products'), {
+        ...dataToSave,
+        createdAt: new Date().toISOString()
+      }).then(() => {
+        playSuccess();
+      }).catch(err => {
+        playError();
+        handleFirestoreError(err, OperationType.CREATE, 'products');
+      });
     }
   };
 
@@ -322,7 +334,7 @@ export default function Inventory() {
 
   if (loading) return (
     <div className="fixed inset-0 bg-white flex flex-col items-center justify-center">
-      <div className="text-7xl animate-spin drop-shadow-2xl mb-4">🔱</div>
+      <div className="text-7xl animate-spin mb-4">🔱</div>
       <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.4em] animate-pulse">Cargando Inventario...</p>
     </div>
   );
@@ -428,7 +440,7 @@ export default function Inventory() {
                             removeImage(idx);
                           }}
                           className="absolute top-2 right-2 w-8 h-8 bg-red-600 text-white rounded-lg flex items-center justify-center shadow-xl active:scale-95 z-20"
-                          title="Eliminar foto"
+                         
                         >
                           <X size={20} />
                         </button>
@@ -559,7 +571,7 @@ export default function Inventory() {
                                     removeImage(idx);
                                   }}
                                   className="absolute top-0 right-0 bg-red-600 text-white p-1 rounded-bl-lg z-20 shadow-lg"
-                                  title="Eliminar foto"
+                                 
                                 >
                                   <X size={12} />
                                 </button>
@@ -608,7 +620,7 @@ export default function Inventory() {
                                         removeImage(idx);
                                       }}
                                       className="absolute top-0 right-0 bg-red-600 text-white p-1 rounded-bl-lg z-20 shadow-lg"
-                                      title="Eliminar foto"
+                                     
                                     >
                                       <X size={12} />
                                     </button>
@@ -669,7 +681,11 @@ export default function Inventory() {
                         </td>
                         <td className="p-2 sm:p-4">
                           {isEditing ? <input type="number" className="w-full p-1 sm:p-4 bg-white border border-slate-200 rounded-lg sm:rounded-xl font-bold text-[10px] sm:text-sm" value={editForm.stock} onChange={e => setEditForm({...editForm, stock: Number(e.target.value)})} /> : (
-                            <span className={cn("px-2 sm:px-4 py-0.5 sm:py-1 rounded-full text-[8px] sm:text-[10px] font-black uppercase tracking-wider", product.stock > 10 ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700")}>
+                            <span className={cn("px-2 sm:px-4 py-0.5 sm:py-1 rounded-full text-[8px] sm:text-[10px] font-black uppercase tracking-wider", 
+                              product.stock >= 15 ? "bg-green-100 text-green-700" : 
+                              product.stock >= 5 ? "bg-amber-100 text-amber-700" : 
+                              "bg-red-100 text-red-700"
+                            )}>
                               {product.stock}
                             </span>
                           )}
@@ -727,7 +743,7 @@ export default function Inventory() {
                                   removeImage(idx);
                                 }}
                                 className="absolute top-2 right-2 w-8 h-8 bg-red-600 text-white rounded-full flex items-center justify-center shadow-xl active:scale-95 z-20"
-                                title="Eliminar foto"
+                               
                               >
                                 <X size={20} />
                               </button>

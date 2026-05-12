@@ -153,7 +153,7 @@ export default function Incidents() {
 
   if (loading) return (
     <div className="fixed inset-0 bg-white flex flex-col items-center justify-center">
-      <div className="text-7xl animate-spin drop-shadow-2xl mb-4">🔱</div>
+      <div className="text-7xl animate-spin mb-4">🔱</div>
       <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.4em] animate-pulse">Cargando Novedades...</p>
     </div>
   );
@@ -163,7 +163,7 @@ export default function Incidents() {
       {isSaving && (
         <div className="fixed inset-0 bg-white/60 backdrop-blur-sm z-[200] flex items-center justify-center">
           <div className="flex flex-col items-center gap-4">
-            <div className="text-6xl animate-spin drop-shadow-2xl">🔱</div>
+            <div className="text-6xl animate-spin">🔱</div>
             <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] animate-pulse">Guardando Novedad...</p>
           </div>
         </div>
@@ -214,7 +214,7 @@ export default function Incidents() {
                       <button 
                         onClick={() => { playClick(); setShowResolutionModal(incident); }}
                         className="bg-green-600 hover:bg-green-700 text-white p-1.5 sm:p-2 rounded-lg transition-all shadow-md active:scale-95"
-                        title="Resolver Novedad"
+                       
                       >
                         <CheckCircle2 size={14} className="sm:w-4 sm:h-4" />
                       </button>
@@ -223,7 +223,7 @@ export default function Incidents() {
                       <button 
                         onClick={() => { playClick(); setConfirmDeleteId(incident.id); }}
                         className="text-slate-300 hover:text-red-500 p-1.5 sm:p-2 transition-colors"
-                        title="Eliminar Registro"
+                       
                       >
                         <Trash2 size={14} className="sm:w-4 sm:h-4" />
                       </button>

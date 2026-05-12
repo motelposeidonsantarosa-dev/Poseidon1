@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { doc, onSnapshot, updateDoc, collection, getDocs, addDoc, runTransaction, query, where, orderBy, getDoc, increment, deleteDoc } from 'firebase/firestore';
+import { doc, onSnapshot, updateDoc, collection, getDocs, addDoc, runTransaction, query, where, orderBy, getDoc, increment, deleteDoc, setDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useAuth } from '../contexts/AuthContext';
 import { useFeedback } from '../hooks/useFeedback';
@@ -134,7 +134,7 @@ export default function RoomDetail() {
 
   if (!room) return (
     <div className="fixed inset-0 bg-white flex flex-col items-center justify-center">
-      <div className="text-7xl animate-spin drop-shadow-2xl mb-4">🔱</div>
+      <div className="text-7xl animate-spin mb-4">🔱</div>
       <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.4em] animate-pulse">Cargando Habitación...</p>
     </div>
   );
@@ -232,211 +232,137 @@ export default function RoomDetail() {
     setShowReservationWarning(null);
   };
 
-  const handleAddExtraHour = async () => {
-    playClick();
+  const handleAddExtraHour = () => {
+    playSuccess();
     if (appUser?.role === 'host' && !activeShift) {
       setShowNoShiftModal(true);
       return;
     }
+    const currentEnd = new Date(room!.endTime || new Date().toISOString());
+    const newEnd = new Date(currentEnd.getTime() + 60 * 60000);
+    const price = getServicePrice('Hora Adicional', EXTRA_HOUR_PRICE);
+    const roomRef = doc(db, 'rooms', room!.id);
     
-    try {
-      await runTransaction(db, async (transaction) => {
-        const roomRef = doc(db, 'rooms', room.id);
-        const roomDoc = await transaction.get(roomRef);
-        if (!roomDoc.exists()) return;
-        
-        const roomData = roomDoc.data() as Room;
-
-        const currentEnd = new Date(roomData.endTime || new Date().toISOString());
-        const newEnd = new Date(currentEnd.getTime() + 60 * 60000);
-        const price = getServicePrice('Hora Adicional', 20000);
-        
-        transaction.update(roomRef, {
-          endTime: roomData.status === 'Ocupada' ? newEnd.toISOString() : null,
-          total: (roomData.total || 0) + price,
-          services: [...(roomData.services || []), { id: 'hora_extra_' + Date.now(), name: 'Hora Adicional', price: price, quantity: 1 }]
-        });
-      });
-      playSuccess();
-    } catch (e) {
-      console.error(e);
-      playError();
-    }
+    updateDoc(roomRef, {
+      endTime: room!.status === 'Ocupada' ? newEnd.toISOString() : null,
+      total: (room!.total || 0) + price,
+      services: [...(room!.services || []), { id: 'hora_extra_' + Date.now(), name: 'Hora Adicional', price: price, quantity: 1 }]
+    }).then(() => playSuccess()).catch(e => { playError(); console.error(e); });
   };
 
-  const handleAddPerson = async () => {
-    playClick();
+  const handleAddPerson = () => {
+    playSuccess();
     if (appUser?.role === 'host' && !activeShift) {
       setShowNoShiftModal(true);
       return;
     }
-    
-    try {
-      await runTransaction(db, async (transaction) => {
-        const roomRef = doc(db, 'rooms', room.id);
-        const roomDoc = await transaction.get(roomRef);
-        if (!roomDoc.exists()) return;
-        
-        const roomData = roomDoc.data() as Room;
-        const price = getServicePrice('Persona Adicional', 20000);
+    const price = getServicePrice('Persona Adicional', EXTRA_PERSON_PRICE);
+    const roomRef = doc(db, 'rooms', room!.id);
 
-        transaction.update(roomRef, {
-          persons: (roomData.persons || 0) + 1,
-          total: (roomData.total || 0) + price,
-          services: [...(roomData.services || []), { id: 'persona_extra_' + Date.now(), name: 'Persona Adicional', price: price, quantity: 1 }]
-        });
-      });
-      playSuccess();
-    } catch (e) {
-      console.error(e);
-      playError();
-    }
+    updateDoc(roomRef, {
+      persons: (room!.persons || 0) + 1,
+      total: (room!.total || 0) + price,
+      services: [...(room!.services || []), { id: 'persona_extra_' + Date.now(), name: 'Persona Adicional', price: price, quantity: 1 }]
+    }).then(() => playSuccess()).catch(e => { playError(); console.error(e); });
   };
 
-  const handleAddService = async (serviceName: string) => {
-    playClick();
+  const handleAddService = (serviceName: string) => {
+    playSuccess();
     if (appUser?.role === 'host' && !activeShift) {
       setShowNoShiftModal(true);
       return;
     }
-    
-    try {
-      await runTransaction(db, async (transaction) => {
-        const roomRef = doc(db, 'rooms', room.id);
-        const roomDoc = await transaction.get(roomRef);
-        if (!roomDoc.exists()) return;
-        
-        const roomData = roomDoc.data() as Room;
-        const price = getServicePrice(serviceName, 20000);
+    const price = getServicePrice(serviceName, SERVICE_PRICE);
+    const roomRef = doc(db, 'rooms', room!.id);
 
-        transaction.update(roomRef, {
-          total: (roomData.total || 0) + price,
-          services: [...(roomData.services || []), { id: 'srv_' + Date.now(), name: serviceName, price: price, quantity: 1 }]
-        });
-      });
-      playSuccess();
-    } catch (e) {
-      console.error(e);
-      playError();
-    }
+    updateDoc(roomRef, {
+      total: (room!.total || 0) + price,
+      services: [...(room!.services || []), { id: 'srv_' + Date.now(), name: serviceName, price: price, quantity: 1 }]
+    }).then(() => playSuccess()).catch(e => { playError(); console.error(e); });
   };
 
-  const handleAddProduct = async (product: InventoryProduct) => {
+  const handleAddProduct = (product: InventoryProduct) => {
+    playSuccess();
+    if (appUser?.role === 'host' && !activeShift) {
+      setShowNoShiftModal(true);
+      return;
+    }
+    if ((product.stock || 0) <= 0) {
+      playError();
+      alert('Sin stock disponible');
+      return;
+    }
+
+    const roomRef = doc(db, 'rooms', room!.id);
+    const productRef = doc(db, 'products', product.id);
+    
+    const existingProducts = room!.products || [];
+    const existingProductIndex = existingProducts.findIndex(p => p.id === product.id);
+    
+    let newProducts = [...existingProducts];
+    if (existingProductIndex >= 0) {
+      newProducts[existingProductIndex] = {
+        ...newProducts[existingProductIndex],
+        quantity: (newProducts[existingProductIndex].quantity || 0) + 1
+      };
+    } else {
+      newProducts.push({ id: product.id, name: product.name, price: product.price, quantity: 1 });
+    }
+    
+    // Optimistic UI updates
+    updateDoc(roomRef, {
+      products: newProducts,
+      total: (room!.total || 0) + product.price
+    }).then(() => playSuccess()).catch(e => { playError(); console.error(e); });
+    
+    updateDoc(productRef, { stock: increment(-1) }).catch(e => console.error(e));
+  };
+
+  const handleRemoveItem = (item: ProductItem, type: 'product' | 'service') => {
     playClick();
     if (appUser?.role === 'host' && !activeShift) {
       setShowNoShiftModal(true);
       return;
     }
 
-    try {
-      await runTransaction(db, async (transaction) => {
-        const productRef = doc(db, 'products', product.id);
-        const roomRef = doc(db, 'rooms', room.id);
-        
-        const [prodDoc, roomDoc] = await Promise.all([
-          transaction.get(productRef),
-          transaction.get(roomRef)
-        ]);
+    const roomRef = doc(db, 'rooms', room!.id);
 
-        if (!prodDoc.exists() || !roomDoc.exists()) return;
-        
-        const currentStock = prodDoc.data().stock || 0;
-        if (currentStock <= 0) throw new Error('Sin stock');
-
-        const roomData = roomDoc.data() as Room;
-        const existingProducts = roomData.products || [];
-        const existingProductIndex = existingProducts.findIndex(p => p.id === product.id);
-        
-        let newProducts = [...existingProducts];
-        if (existingProductIndex >= 0) {
-          newProducts[existingProductIndex] = {
-            ...newProducts[existingProductIndex],
-            quantity: (newProducts[existingProductIndex].quantity || 0) + 1
+    if (type === 'service') {
+      const existingServices = room!.services || [];
+      const itemIdx = existingServices.findIndex(s => s.id === item.id);
+      
+      if (itemIdx >= 0) {
+        const newServices = existingServices.filter(s => s.id !== item.id);
+        updateDoc(roomRef, {
+          services: newServices,
+          total: Math.max(0, (room!.total || 0) - (item.price * item.quantity))
+        }).then(() => playSuccess()).catch(e => { playError(); console.error(e); });
+      }
+    } else {
+      const productRef = doc(db, 'products', item.id);
+      const existingProducts = room!.products || [];
+      let newProducts = [...existingProducts];
+      const index = newProducts.findIndex(p => p.id === item.id);
+      
+      if (index >= 0) {
+        if (newProducts[index].quantity > 1) {
+          newProducts[index] = {
+            ...newProducts[index],
+            quantity: newProducts[index].quantity - 1
           };
         } else {
-          newProducts.push({ id: product.id, name: product.name, price: product.price, quantity: 1 });
+          newProducts.splice(index, 1);
         }
+
+        const newTotal = Math.max(0, (room!.total || 0) - item.price);
         
-        transaction.update(productRef, { stock: currentStock - 1 });
-        transaction.update(roomRef, {
+        updateDoc(roomRef, {
           products: newProducts,
-          total: (roomData.total || 0) + product.price
-        });
-      });
-      playSuccess();
-    } catch (e: any) {
-
-      console.error(e);
-      playError();
-      if (e.message !== 'Sin stock') {
-        alert('Error al agregar producto');
-      } else {
-        alert('Sin stock disponible');
-      }
-    }
-  };
-
-  const handleRemoveItem = async (item: ProductItem, type: 'product' | 'service') => {
-    playClick();
-    if (appUser?.role === 'host' && !activeShift) {
-      setShowNoShiftModal(true);
-      return;
-    }
-
-    try {
-      await runTransaction(db, async (transaction) => {
-        const roomRef = doc(db, 'rooms', room.id);
-        const roomDoc = await transaction.get(roomRef);
-        if (!roomDoc.exists()) return;
+          total: newTotal
+        }).then(() => playSuccess()).catch(e => { playError(); console.error(e); });
         
-        const roomData = roomDoc.data() as Room;
-
-        if (type === 'service') {
-          const existingServices = roomData.services || [];
-          const itemIdx = existingServices.findIndex(s => s.id === item.id);
-          
-          if (itemIdx >= 0) {
-            const newServices = existingServices.filter(s => s.id !== item.id);
-            transaction.update(roomRef, {
-              services: newServices,
-              total: Math.max(0, (roomData.total || 0) - (item.price * item.quantity))
-            });
-          }
-        } else {
-          const productRef = doc(db, 'products', item.id);
-          const prodDoc = await transaction.get(productRef);
-          
-          const existingProducts = roomData.products || [];
-          let newProducts = [...existingProducts];
-          const index = newProducts.findIndex(p => p.id === item.id);
-          
-          if (index >= 0) {
-            if (newProducts[index].quantity > 1) {
-              newProducts[index] = {
-                ...newProducts[index],
-                quantity: newProducts[index].quantity - 1
-              };
-            } else {
-              newProducts.splice(index, 1);
-            }
-
-            const newTotal = Math.max(0, (roomData.total || 0) - item.price);
-            
-            if (prodDoc.exists()) {
-              transaction.update(productRef, { stock: (prodDoc.data().stock || 0) + 1 });
-            }
-            
-            transaction.update(roomRef, {
-              products: newProducts,
-              total: newTotal
-            });
-          }
-        }
-      });
-      playSuccess();
-    } catch (e) {
-      console.error(e);
-      playError();
+        updateDoc(productRef, { stock: increment(1) }).catch(e => console.error(e));
+      }
     }
   };
 
@@ -448,82 +374,65 @@ export default function RoomDetail() {
     
     setIsSaving(true);
     try {
-      const result = await runTransaction(db, async (transaction) => {
-        // Step 1: Reads (MUST BE FIRST)
-        const invoiceRef = doc(db, 'settings', 'invoice');
-        const invoiceDoc = await transaction.get(invoiceRef);
-        
-        const roomRef = doc(db, 'rooms', room.id);
-        const roomDoc = await transaction.get(roomRef);
-
-        if (!roomDoc.exists()) throw new Error('La habitación no existe');
-        const dbRoom = roomDoc.data() as Room;
-
-        const productSnapshotPromises = (dbRoom.products || []).map(p => 
-          transaction.get(doc(db, 'products', p.id))
-        );
-        const productDocs = await Promise.all(productSnapshotPromises);
-        
-        // Step 2: Writes
-        let currentInvoiceNumber = null;
-        if (invoiceDoc.exists() && invoiceDoc.data().enabled) {
+      // Offline-friendly reads
+      const invoiceRef = doc(db, 'settings', 'invoice');
+      let currentInvoiceNumber = null;
+      try {
+        const invoiceDoc = await Promise.race([
+          getDoc(invoiceRef),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 1000))
+        ]) as any;
+        if (invoiceDoc && invoiceDoc.exists() && invoiceDoc.data().enabled) {
           currentInvoiceNumber = invoiceDoc.data().currentNumber;
-          transaction.update(invoiceRef, { currentNumber: (currentInvoiceNumber || 0) + 1 });
+          updateDoc(invoiceRef, { currentNumber: increment(1) }).catch(e => console.error(e));
         }
+      } catch(e) {
+        console.warn("Could not read invoice settings (possibly offline), continuing without invoice number.", e);
+      }
 
-        const ticketRef = doc(collection(db, 'tickets'));
-        const ticketData = {
-          roomId: room.id,
-          roomName: room.name,
-          startTime: dbRoom.startTime || new Date().toISOString(),
-          endTime: new Date().toISOString(),
-          products: dbRoom.products || [],
-          services: dbRoom.services || [],
-          total: dbRoom.total || 0,
-          date: new Date().toISOString(),
-          hostId: appUser?.id || '',
-          hostName: appUser?.name || 'Desconocido',
-          shiftId: activeShift?.id || null,
-          paymentMethod,
-          invoiceNumber: currentInvoiceNumber,
-          transferPhoto: paymentMethod === 'Transferencia' ? (photoToSave || transferPhoto) : null,
-          reservationAbono: dbRoom.reservationAbono || 0,
-          finalTotal: (dbRoom.total || 0) - (dbRoom.reservationAbono || 0)
-        };
-        transaction.set(ticketRef, ticketData);
+      // Prepare final ticket
+      const ticketRef = doc(collection(db, 'tickets'));
+      const dbRoom = room!;
+      
+      const ticketData = {
+        roomId: room!.id,
+        roomName: room!.name,
+        startTime: dbRoom.startTime || new Date().toISOString(),
+        endTime: new Date().toISOString(),
+        products: dbRoom.products || [],
+        services: dbRoom.services || [],
+        total: dbRoom.total || 0,
+        date: new Date().toISOString(),
+        hostId: appUser?.id || '',
+        hostName: appUser?.name || 'Desconocido',
+        shiftId: activeShift?.id || null,
+        paymentMethod,
+        invoiceNumber: currentInvoiceNumber,
+        transferPhoto: paymentMethod === 'Transferencia' ? (photoToSave || transferPhoto) : null,
+        reservationAbono: dbRoom.reservationAbono || 0,
+        finalTotal: (dbRoom.total || 0) - (dbRoom.reservationAbono || 0)
+      };
 
-        // Update Stock (final verify)
-        productDocs.forEach((prodDoc, idx) => {
-          if (prodDoc.exists()) {
-            const soldQty = dbRoom.products[idx].quantity;
-            const currentStock = prodDoc.data().stock || 0;
-            transaction.update(prodDoc.ref, { stock: Math.max(0, currentStock - soldQty) });
-          }
-        });
-
-        // Reset Room
-        const nextBasePrice = getServicePrice('Servicio Base', 60000);
-        transaction.update(roomRef, {
-          status: 'Limpieza',
-          startTime: null,
-          endTime: null,
-          persons: 2,
-          services: [],
-          products: [],
-          total: nextBasePrice,
-          basePrice: nextBasePrice,
-          currentHostId: null,
-          currentHostName: null,
-          reservationAbono: 0
-        });
-
-        return { 
-          currentInvoiceNumber, 
-          finalRoomData: dbRoom 
-        };
+      // Reset Room optimistically
+      const nextBasePrice = getServicePrice('Servicio Base', 60000);
+      
+      // Fire-and-forget writes
+      setDoc(ticketRef, ticketData).catch(e => console.error(e));
+      
+      updateDoc(doc(db, 'rooms', dbRoom.id), {
+        status: 'Limpieza',
+        startTime: null,
+        endTime: null,
+        persons: 2,
+        services: [],
+        products: [],
+        total: nextBasePrice,
+        basePrice: nextBasePrice,
+        currentHostId: null,
+        currentHostName: null,
+        reservationAbono: 0
       });
 
-      const { currentInvoiceNumber, finalRoomData } = result;
       setShowPaymentModal(false);
       setTransferPhoto(null);
       setIsCapturingPhoto(false);
@@ -531,7 +440,7 @@ export default function RoomDetail() {
       const ticketHtml = `
           <html>
             <head>
-              <title>Ticket ${room.name}</title>
+              <title>Ticket ${room!.name}</title>
               <style>
                 @page { margin: 0; size: 58mm auto; }
                 body { font-family: monospace; width: 100%; margin: 0 auto; padding: 2mm; box-sizing: border-box; font-size: 10px; }
@@ -563,11 +472,11 @@ export default function RoomDetail() {
                 ${paymentMethod === 'Transferencia' && (photoToSave || transferPhoto) ? `<p style="color: blue; font-weight: bold;">[COMPROBANTE ADJUNTO EN SISTEMA]</p>` : ''}
               </div>
               <div class="border-t border-b">
-                <div class="flex-between"><span>Habitación:</span> <strong>${room.name}</strong></div>
+                <div class="flex-between"><span>Habitación:</span> <strong>${room!.name}</strong></div>
                 <div class="flex-between"><span>Fecha:</span> <span>${format(new Date(), 'dd/MM/yyyy')}</span></div>
-                <div class="flex-between"><span>Inicio:</span> <span>${finalRoomData.startTime ? format(new Date(finalRoomData.startTime), 'HH:mm') : ''}</span></div>
+                <div class="flex-between"><span>Inicio:</span> <span>${dbRoom.startTime ? format(new Date(dbRoom.startTime), 'HH:mm') : ''}</span></div>
                 <div class="flex-between"><span>Fin:</span> <span>${format(new Date(), 'HH:mm')}</span></div>
-                <div class="flex-between"><span>Atiende:</span> <span>${finalRoomData.currentHostName || appUser?.name}</span></div>
+                <div class="flex-between"><span>Atiende:</span> <span>${dbRoom.currentHostName || appUser?.name}</span></div>
                 <div class="flex-between"><span>Pago:</span> <span>${paymentMethod}</span></div>
               </div>
               <table class="mb-4">
@@ -582,16 +491,16 @@ export default function RoomDetail() {
                   <tr>
                     <td>1</td>
                     <td>Servicio Base</td>
-                    <td class="text-right">$${(finalRoomData.basePrice || 60000).toLocaleString()}</td>
+                    <td class="text-right">$${(dbRoom.basePrice || 60000).toLocaleString()}</td>
                   </tr>
-                  ${(finalRoomData.services || []).filter(s => s.name !== 'Servicio Base').map(srv => `
+                  ${(dbRoom.services || []).filter(s => s.name !== 'Servicio Base').map(srv => `
                     <tr>
                       <td>${srv.quantity}</td>
                       <td>${srv.name}</td>
                       <td class="text-right">$${(srv.price * srv.quantity).toLocaleString()}</td>
                     </tr>
                   `).join('')}
-                  ${(finalRoomData.products || []).map(prod => `
+                  ${(dbRoom.products || []).map(prod => `
                     <tr>
                       <td>${prod.quantity}</td>
                       <td>${prod.name}</td>
@@ -600,15 +509,15 @@ export default function RoomDetail() {
                   `).join('')}
                 </tbody>
               </table>
-                ${finalRoomData.reservationAbono ? `
+                ${dbRoom.reservationAbono ? `
                 <div class="border-t pt-2">
-                  <div class="flex-between"><span>Subtotal:</span> <span>$${(finalRoomData.total || 0).toLocaleString()}</span></div>
-                  <div class="flex-between"><span>Abono Reserva:</span> <span>-$${finalRoomData.reservationAbono.toLocaleString()}</span></div>
+                  <div class="flex-between"><span>Subtotal:</span> <span>$${(dbRoom.total || 0).toLocaleString()}</span></div>
+                  <div class="flex-between"><span>Abono Reserva:</span> <span>-$${dbRoom.reservationAbono.toLocaleString()}</span></div>
                 </div>
                 ` : ''}
               <div class="border-t flex-between font-bold" style="font-size: 1.2rem;">
                 <span>TOTAL A PAGAR</span>
-                <span>$${((finalRoomData.total || 0) - (finalRoomData.reservationAbono || 0)).toLocaleString()}</span>
+                <span>$${((dbRoom.total || 0) - (dbRoom.reservationAbono || 0)).toLocaleString()}</span>
               </div>
               <div class="text-center border-t mt-4">
                 <p class="font-bold">EN POSEIDÓN, TE SENTIRÁS COMO LOS DIOSES</p>
@@ -625,9 +534,8 @@ export default function RoomDetail() {
     } catch (err: any) {
       console.error("Error closing account", err);
       playError();
-      // If it's a permission error, handleFirestoreError will log auth details
       if (err.message?.includes('permission') || err.code === 'permission-denied') {
-        handleFirestoreError(err, OperationType.WRITE, `rooms/${room.id}/close-account`);
+        handleFirestoreError(err, OperationType.WRITE, `rooms/${room!.id}/close-account`);
       } else {
         alert('Error al guardar el servicio. Es posible que la foto sea muy pesada o haya un error de conexión.');
       }
@@ -753,7 +661,7 @@ export default function RoomDetail() {
       {(isNavigating || isSaving) && (
         <div className="fixed inset-0 bg-white/60 backdrop-blur-sm z-[200] flex items-center justify-center">
           <div className="flex flex-col items-center gap-4">
-            <div className="text-6xl animate-spin drop-shadow-2xl">🔱</div>
+            <div className="text-6xl animate-spin">🔱</div>
             <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] animate-pulse">
               {isSaving ? 'Guardando cambios...' : 'Cargando Dashboard...'}
             </p>
@@ -930,8 +838,8 @@ export default function RoomDetail() {
                       </div>
                       <div className="relative z-10 flex flex-col justify-end mt-1">
                         <span className={cn(
-                          "text-[6px] sm:text-[9px] lg:text-[6px] font-black uppercase px-1 py-0.5 rounded-full w-max",
-                          prod.stock > 5 ? "bg-black/5" : "bg-red-500 text-white"
+                          "text-[10px] sm:text-xs font-black uppercase px-1 py-0.5 rounded-full w-max",
+                          prod.stock >= 15 ? "bg-green-500 text-white" : prod.stock >= 5 ? "bg-amber-500 text-white" : "bg-red-500 text-white"
                         )}>Stock: {prod.stock}</span>
                       </div>
                     </button>
@@ -965,8 +873,8 @@ export default function RoomDetail() {
                       </div>
                       <div className="relative z-10 flex flex-col justify-end mt-1">
                         <span className={cn(
-                          "text-[6px] sm:text-[9px] lg:text-[6px] font-black uppercase px-1 py-0.5 rounded-full w-max",
-                          prod.stock > 5 ? "bg-black/5" : "bg-red-500 text-white"
+                          "text-[10px] sm:text-xs font-black uppercase px-1 py-0.5 rounded-full w-max",
+                          prod.stock >= 15 ? "bg-green-500 text-white" : prod.stock >= 5 ? "bg-amber-500 text-white" : "bg-red-500 text-white"
                         )}>Stock: {prod.stock}</span>
                       </div>
                     </button>
@@ -1000,8 +908,8 @@ export default function RoomDetail() {
                       </div>
                       <div className="relative z-10 flex justify-between items-end">
                         <span className={cn(
-                          "text-[6px] sm:text-[9px] lg:text-[6px] font-black uppercase px-1 py-0.5 rounded-full",
-                          prod.stock > 5 ? "bg-black/5" : "bg-red-500 text-white"
+                          "text-[10px] sm:text-xs font-black uppercase px-1 py-0.5 rounded-full",
+                          prod.stock >= 15 ? "bg-green-500 text-white" : prod.stock >= 5 ? "bg-amber-500 text-white" : "bg-red-500 text-white"
                         )}>Stock: {prod.stock}</span>
                       </div>
                     </button>
@@ -1038,8 +946,8 @@ export default function RoomDetail() {
                       </div>
                       <div className="relative z-10 flex flex-col justify-end mt-1">
                         <span className={cn(
-                          "text-[6px] sm:text-[9px] lg:text-[6px] font-black uppercase px-2 py-0.5 rounded-full w-max shadow-sm",
-                          prod.stock > 5 ? "bg-indigo-600 text-white" : "bg-red-500 text-white"
+                          "text-[10px] sm:text-xs font-black uppercase px-2 py-0.5 rounded-full w-max shadow-sm",
+                          prod.stock >= 15 ? "bg-green-500 text-white" : prod.stock >= 5 ? "bg-amber-500 text-white" : "bg-red-500 text-white"
                         )}>Stock: {prod.stock}</span>
                       </div>
                     </button>
@@ -1153,7 +1061,7 @@ export default function RoomDetail() {
             <div className="flex flex-col gap-3">
               {isSaving ? (
                 <div className="py-12 flex flex-col items-center gap-4">
-                  <div className="text-7xl animate-spin drop-shadow-2xl">🔱</div>
+                  <div className="text-7xl animate-spin">🔱</div>
                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.4em] animate-pulse">Procesando Pago...</p>
                 </div>
               ) : !isCapturingPhoto ? (

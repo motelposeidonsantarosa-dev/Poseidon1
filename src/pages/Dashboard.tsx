@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef, ChangeEvent } from 'react';
-import { collection, onSnapshot, doc, setDoc, query, where, getDocs, updateDoc, addDoc, deleteDoc, runTransaction, getDoc, orderBy, limit } from 'firebase/firestore';
+import { collection, onSnapshot, doc, setDoc, query, where, getDocs, updateDoc, addDoc, deleteDoc, runTransaction, getDoc, orderBy, limit, increment } from 'firebase/firestore';
 import { db } from '../firebase';
 import { Link, useNavigate } from 'react-router-dom';
 import { Clock, Users, BedDouble, PlayCircle, StopCircle, Plus, Edit2, X, CalendarCheck, AlertCircle, User, ShoppingBag, Wine, Heart, Trash2, Camera, RotateCcw, Search, Printer, Minus, Cookie } from 'lucide-react';
@@ -507,7 +507,7 @@ export default function Dashboard() {
   };
 
   const handleDirectSaleToggleProduct = (product: any) => {
-    playClick();
+    playSuccess();
     const existing = directSaleProducts.find(p => p.id === product.id);
     const currentQty = existing ? existing.quantity : 0;
 
@@ -565,55 +565,50 @@ export default function Dashboard() {
     playClick();
 
     try {
-      await runTransaction(db, async (transaction) => {
-        // Step 1: Fetch all required data first (Reads)
-        const invoiceRef = doc(db, 'settings', 'invoice');
-        const invoiceDoc = await transaction.get(invoiceRef);
-        
-        const prodDocs = await Promise.all(
-          directSaleProducts.map(item => transaction.get(doc(db, 'products', item.id)))
-        );
-
-        // Step 2: Handle Invoice number (Writes)
-        let currentInvoiceNumber = null;
-        if (invoiceDoc.exists() && invoiceDoc.data().enabled) {
+      // Offline-friendly invoice fetch
+      const invoiceRef = doc(db, 'settings', 'invoice');
+      let currentInvoiceNumber = null;
+      try {
+        const invoiceDoc = await Promise.race([
+          getDoc(invoiceRef),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 1000))
+        ]) as any;
+        if (invoiceDoc && invoiceDoc.exists() && invoiceDoc.data().enabled) {
           currentInvoiceNumber = invoiceDoc.data().currentNumber;
-          transaction.update(invoiceRef, { currentNumber: currentInvoiceNumber + 1 });
+          updateDoc(invoiceRef, { currentNumber: increment(1) }).catch(e => console.error(e));
         }
+      } catch(e) {
+        console.warn("Could not read invoice settings (possibly offline), continuing without invoice number.", e);
+      }
 
-        // Step 3: Create ticket (Writes)
-        const ticketRef = doc(collection(db, 'tickets'));
-        const ticketData = {
-          roomId: 'DIRECTA',
-          roomName: 'Venta Directa',
-          startTime: new Date().toISOString(),
-          endTime: new Date().toISOString(),
-          products: directSaleProducts,
-          services: [],
-          total: directSaleTotal,
-          date: new Date().toISOString(),
-          hostId: appUser?.id || '',
-          hostName: appUser?.name || 'Desconocido',
-          shiftId: activeShift?.id || null,
-          paymentMethod: method,
-          invoiceNumber: currentInvoiceNumber,
-          transferPhoto: method === 'Transferencia' ? (photoToSave || directSalePhoto) : null
-        };
-        transaction.set(ticketRef, ticketData);
+      // Create ticket
+      const ticketRef = doc(collection(db, 'tickets'));
+      const ticketData = {
+        roomId: 'DIRECTA',
+        roomName: 'Venta Directa',
+        startTime: new Date().toISOString(),
+        endTime: new Date().toISOString(),
+        products: directSaleProducts,
+        services: [],
+        total: directSaleTotal,
+        date: new Date().toISOString(),
+        hostId: appUser?.id || '',
+        hostName: appUser?.name || 'Desconocido',
+        shiftId: activeShift?.id || null,
+        paymentMethod: method,
+        invoiceNumber: currentInvoiceNumber,
+        transferPhoto: method === 'Transferencia' ? (photoToSave || directSalePhoto) : null
+      };
 
-        // Step 4: Update stock (Writes)
-        prodDocs.forEach((prodDoc, index) => {
-          if (prodDoc.exists()) {
-            const item = directSaleProducts[index];
-            const currentStock = prodDoc.data().stock || 0;
-            transaction.update(prodDoc.ref, { stock: Math.max(0, currentStock - item.quantity) });
-          }
-        });
+      // Apply ticket and increment sequentially (optimistic UI)
+      setDoc(ticketRef, ticketData).catch(e => console.error(e));
+      
+      directSaleProducts.forEach((item) => {
+        updateDoc(doc(db, 'products', item.id), { stock: increment(-item.quantity) }).catch(e => console.error(e));
+      });
 
-        return { currentInvoiceNumber, method, photoToSave };
-      }).then(async (result) => {
-        // Step 4: Print
-        const ticketHtml = `
+      // Print
+      const ticketHtml = `
           <html>
             <head>
               <title>Venta Directa</title>
@@ -644,13 +639,13 @@ export default function Dashboard() {
                 <p>motelposeidonsantarosa@gmail.com</p>
                 <p>Facebook: @PoseidonMot</p>
                 <p class="font-bold border-t border-b py-1" style="margin-top: 5px; font-size: 1.1rem;">VENTA DIRECTA</p>
-                ${result.currentInvoiceNumber ? `<p style="font-size: 1.2rem; font-weight: bold; margin-top: 5px;">FACTURA NÚMERO: ${result.currentInvoiceNumber}</p>` : ''}
-                ${result.method === 'Transferencia' && (result.photoToSave || directSalePhoto) ? `<p style="color: blue; font-weight: bold;">[COMPROBANTE ADJUNTO EN SISTEMA]</p>` : ''}
+                ${currentInvoiceNumber ? `<p style="font-size: 1.2rem; font-weight: bold; margin-top: 5px;">FACTURA NÚMERO: ${currentInvoiceNumber}</p>` : ''}
+                ${method === 'Transferencia' && (photoToSave || directSalePhoto) ? `<p style="color: blue; font-weight: bold;">[COMPROBANTE ADJUNTO EN SISTEMA]</p>` : ''}
               </div>
               <div class="border-t border-b">
                 <div class="flex-between"><span>Fecha:</span> <span>${format(new Date(), 'dd/MM/yyyy HH:mm')}</span></div>
                 <div class="flex-between"><span>Atiende:</span> <span>${appUser?.name}</span></div>
-                <div class="flex-between"><span>Pago:</span> <span>${result.method}</span></div>
+                <div class="flex-between"><span>Pago:</span> <span>${method}</span></div>
               </div>
               <table class="mb-4">
                 <thead>
@@ -688,7 +683,6 @@ export default function Dashboard() {
         setDirectSaleTotal(0);
         setDirectSalePaymentMethod(null);
         setDirectSalePhoto(null);
-      });
     } catch (err) {
       playError();
       console.error(err);
@@ -789,7 +783,7 @@ export default function Dashboard() {
 
   if (loading) return (
     <div className="fixed inset-0 bg-white flex flex-col items-center justify-center">
-      <div className="text-7xl animate-spin drop-shadow-2xl mb-4">🔱</div>
+      <div className="text-7xl animate-spin mb-4">🔱</div>
       <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.4em] animate-pulse">Cargando Sistema...</p>
     </div>
   );
@@ -799,13 +793,32 @@ export default function Dashboard() {
       {(isNavigating || isDirectSaleSaving) && (
         <div className="fixed inset-0 bg-white/60 backdrop-blur-sm z-[200] flex items-center justify-center">
           <div className="flex flex-col items-center gap-4">
-            <div className="text-6xl animate-spin drop-shadow-2xl">🔱</div>
+            <div className="text-6xl animate-spin">🔱</div>
             <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] animate-pulse">
               {isDirectSaleSaving ? 'Procesando Venta...' : 'Cargando Habitación...'}
             </p>
           </div>
         </div>
       )}
+      {appUser?.role === 'admin' && inventory.filter(p => !['Servicios', 'Servicio'].includes(p.category) && p.stock <= 5).length > 0 && (
+        <div className="mb-4 bg-red-50 border border-red-200 text-red-700 p-3 sm:p-4 rounded-2xl flex items-center justify-between shadow-sm animate-in fade-in slide-in-from-top-4 duration-300">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center shrink-0 animate-pulse">
+              <AlertCircle size={24} className="text-red-600" />
+            </div>
+            <div>
+              <h4 className="font-black text-sm sm:text-base uppercase tracking-tight text-red-900 leading-none mb-1">Stock Critico</h4>
+              <p className="text-[10px] sm:text-xs font-bold opacity-80 leading-tight">
+                Hay {inventory.filter(p => !['Servicios', 'Servicio'].includes(p.category) && p.stock <= 5).length} items con 5 uds o menos.
+              </p>
+            </div>
+          </div>
+          <button onClick={() => { playClick(); navigate('/dashboard/inventory'); }} className="bg-red-600 hover:bg-red-700 text-white px-3 py-2 rounded-xl text-[9px] sm:text-xs font-bold uppercase transition-colors shrink-0 whitespace-nowrap shadow-sm active:scale-95">
+            Comprar
+          </button>
+        </div>
+      )}
+
       <div className="flex justify-between items-center mb-4 lg:mb-4 sm:mb-5">
         <h1 className="text-xl sm:text-2xl lg:text-xl font-bold text-slate-900 uppercase tracking-tight">Estado de Habitaciones</h1>
         <div className="flex flex-wrap sm:flex-nowrap gap-2">
@@ -931,7 +944,7 @@ export default function Dashboard() {
                             setEditRoomName(room.name);
                           }}
                           className="p-1 sm:p-2 bg-white/20 hover:bg-white/40 rounded-full transition-colors"
-                          title="Editar Nombre"
+                         
                         >
                           <Edit2 size={10} className="sm:hidden lg:block lg:w-3 lg:h-3" />
                           <Edit2 size={18} className="hidden sm:block lg:hidden" />
@@ -943,7 +956,7 @@ export default function Dashboard() {
                             handleDeleteRoom(room.id);
                           }}
                           className="p-1 sm:p-2 bg-white/20 hover:bg-red-500 hover:text-white rounded-full transition-colors"
-                          title="Eliminar Habitación"
+                         
                         >
                           <Trash2 size={10} className="sm:hidden lg:block lg:w-3 lg:h-3" />
                           <Trash2 size={18} className="hidden sm:block lg:hidden" />
@@ -1224,8 +1237,8 @@ export default function Dashboard() {
                               </div>
                               <div className="relative z-10 flex justify-between items-end">
                                 <span className={cn(
-                                  "text-[10px] font-black uppercase px-2 py-0.5 rounded-full",
-                                  effectiveStock > 10 ? "bg-black/5" : "bg-red-500 text-white"
+                                  "text-[11px] sm:text-xs font-black uppercase px-2 py-0.5 rounded-full",
+                                  effectiveStock >= 15 ? "bg-green-500 text-white" : effectiveStock >= 5 ? "bg-amber-500 text-white" : "bg-red-500 text-white"
                                 )}>Stock: {effectiveStock}</span>
                                 <Plus size={20} className="opacity-40 group-hover:opacity-100 transition-opacity" />
                               </div>
@@ -1261,8 +1274,8 @@ export default function Dashboard() {
                           </div>
                           <div className="relative z-10 flex justify-between items-end">
                             <span className={cn(
-                              "text-[10px] font-black uppercase px-2 py-0.5 rounded-full",
-                              effectiveStock > 10 ? "bg-black/5" : "bg-red-500 text-white"
+                              "text-[11px] sm:text-xs font-black uppercase px-2 py-0.5 rounded-full",
+                              effectiveStock >= 15 ? "bg-green-500 text-white" : effectiveStock >= 5 ? "bg-amber-500 text-white" : "bg-red-500 text-white"
                             )}>Stock: {effectiveStock}</span>
                             <Plus size={20} className="opacity-40 group-hover:opacity-100 transition-opacity" />
                           </div>
@@ -1297,8 +1310,8 @@ export default function Dashboard() {
                           </div>
                           <div className="relative z-10 flex justify-between items-end">
                             <span className={cn(
-                              "text-[10px] font-black uppercase px-2 py-0.5 rounded-full",
-                              effectiveStock > 10 ? "bg-black/5" : "bg-red-500 text-white"
+                              "text-[11px] sm:text-xs font-black uppercase px-2 py-0.5 rounded-full",
+                              effectiveStock >= 15 ? "bg-green-500 text-white" : effectiveStock >= 5 ? "bg-amber-500 text-white" : "bg-red-500 text-white"
                             )}>Stock: {effectiveStock}</span>
                             <Plus size={20} className="opacity-40 group-hover:opacity-100 transition-opacity" />
                           </div>

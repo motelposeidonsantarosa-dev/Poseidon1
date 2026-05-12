@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { collection, onSnapshot, addDoc, updateDoc, doc, query, where, orderBy, getDocs } from 'firebase/firestore';
+import { collection, onSnapshot, addDoc, updateDoc, doc, query, where, orderBy, getDocs, setDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useFeedback } from '../hooks/useFeedback';
 import { handleFirestoreError, OperationType } from '../utils/error';
 import { CalendarCheck, Plus, X, Trash2, Clock, User, DoorOpen, AlertCircle, CheckCircle, Search, Calendar } from 'lucide-react';
-import { format, isAfter, isBefore, addHours, subHours, parseISO } from 'date-fns';
+import { format, isBefore, addHours, parseISO } from 'date-fns';
 import { cn } from '../lib/utils';
+import { compressImage } from '../utils/image';
+import { useAuth } from '../contexts/AuthContext';
 
 interface Reservation {
   id: string;
@@ -26,7 +28,6 @@ interface Room {
   status: string;
 }
 
-import { useAuth } from '../contexts/AuthContext';
 export default function Reservations() {
   const { appUser } = useAuth();
   const { playClick, playSuccess, playError } = useFeedback();
@@ -48,6 +49,7 @@ export default function Reservations() {
   const [abono, setAbono] = useState<string>('40000');
   const [paymentMethod, setPaymentMethod] = useState<'Efectivo' | 'Transferencia'>('Efectivo');
   const fileInputRef = React.useRef<HTMLInputElement>(null);
+  const [formError, setFormError] = useState<string | null>(null);
 
   useEffect(() => {
     // Try to get "Valor Reserva" from products (formerly inventory typo)
@@ -112,24 +114,26 @@ export default function Reservations() {
 
     if (!selectedRoomId || !clientName || !reservationDate || !reservationTime) {
       playError();
-      alert('Por favor complete todos los campos.');
+      setFormError('Por favor complete todos los campos.');
       return;
     }
 
-    const dateTime = `${reservationDate}T${reservationTime}:00`;
-    const resDate = new Date(dateTime);
+    const [year, month, day] = reservationDate.split('-');
+    const [hours, minutes] = reservationTime.split(':');
+    const resDate = new Date(Number(year), Number(month) - 1, Number(day), Number(hours), Number(minutes));
+    
     const now = new Date();
     const oneHourFromNow = addHours(now, 1);
 
     if (isBefore(resDate, oneHourFromNow)) {
       playError();
-      alert('Las reservas deben realizarse con al menos 1 hora de anticipación.');
+      setFormError('Las reservas deben realizarse con al menos 1 hora de anticipación.');
       return;
     }
 
     if (paymentMethod === 'Transferencia' && Number(abono) > 0 && !photoToUpload) {
       playError();
-      alert('Por favor adjunte el comprobante de transferencia.');
+      setFormError('Por favor adjunte el comprobante de transferencia.');
       return;
     }
 
@@ -137,15 +141,15 @@ export default function Reservations() {
     if (!room) return;
 
     setLoading(true);
+    setFormError(null);
     try {
-      const dateTime = `${reservationDate}T${reservationTime}:00`;
       const abonoValue = Number(abono);
       
       const resData = {
         roomId: selectedRoomId,
         roomName: room.name,
         clientName,
-        date: new Date(dateTime).toISOString(),
+        date: resDate.toISOString(),
         status: 'pending',
         createdAt: new Date().toISOString(),
         abono: abonoValue,
@@ -153,11 +157,15 @@ export default function Reservations() {
         transferPhoto: abonoValue > 0 && paymentMethod === 'Transferencia' ? photoToUpload : null
       };
 
-      const resRef = await addDoc(collection(db, 'reservations'), resData);
+      const resRef = doc(collection(db, 'reservations'));
+
+      // Fire and forget setDoc
+      setDoc(resRef, resData).catch(e => console.error("Res log failed:", e));
 
       // If there is a down payment, register it as a ticket so it appears in shift summary and history
+      // We do this optimistically without awaiting to prevent UI blocking
       if (abonoValue > 0) {
-        await addDoc(collection(db, 'tickets'), {
+        setDoc(doc(collection(db, 'tickets')), {
           roomId: selectedRoomId,
           roomName: `Reserva: ${room.name}`,
           startTime: new Date().toISOString(),
@@ -172,7 +180,7 @@ export default function Reservations() {
           reservationId: resRef.id,
           isTemporary: true,
           transferPhoto: paymentMethod === 'Transferencia' ? photoToUpload : null
-        });
+        }).catch(e => console.error("Ticket log failed:", e));
       }
 
       playSuccess();
@@ -181,7 +189,7 @@ export default function Reservations() {
     } catch (error) {
       playError();
       console.error("Error adding reservation:", error);
-      alert("Error al registrar la reserva.");
+      setFormError("Error al registrar la reserva. Comprueba tu conexión.");
     } finally {
       setLoading(false);
     }
@@ -193,51 +201,51 @@ export default function Reservations() {
       const reader = new FileReader();
       reader.onloadend = async () => {
         try {
-          const { compressImage } = await import('../utils/image');
           const compressed = await compressImage(reader.result as string);
           setPhotoToUpload(compressed);
           playSuccess();
         } catch (err) {
           playError();
-          alert("Error al comprimir la imagen.");
+          setFormError("Error al comprimir la imagen.");
         }
       };
       reader.readAsDataURL(file);
     }
   };
 
-  const handleCancelReservation = async () => {
+  const handleCancelReservation = () => {
     if (!cancellingId) return;
     playClick();
+    setFormError(null);
 
-    try {
-      const res = reservations.find(r => r.id === cancellingId);
-      if (!res) return;
+    const res = reservations.find(r => r.id === cancellingId);
+    if (!res) return;
 
-      if (res.abono && res.abono > 0) {
-        // No refund logic (reservations are non-refundable)
-        const ticketsQ = query(collection(db, 'tickets'), where('reservationId', '==', cancellingId));
-        const ticketsSnap = await getDocs(ticketsQ);
+    if (res.abono && res.abono > 0) {
+      // Optimistically update tickets in the background
+      const ticketsQ = query(collection(db, 'tickets'), where('reservationId', '==', cancellingId));
+      getDocs(ticketsQ).then(ticketsSnap => {
         if (!ticketsSnap.empty) {
-          await updateDoc(doc(db, 'tickets', ticketsSnap.docs[0].id), {
+          updateDoc(doc(db, 'tickets', ticketsSnap.docs[0].id), {
             roomName: `Reserva Cancelada (Sin Reembolso): ${res.roomName}`,
             isCancelledAbono: true,
             isTemporary: false
           });
         }
-        alert("Reserva cancelada. El abono NO es reembolsable.");
-      }
-
-      await updateDoc(doc(db, 'reservations', cancellingId), {
-        status: 'cancelled'
-      });
-
-      playSuccess();
-      setCancellingId(null);
-    } catch (error) {
-      playError();
-      console.error("Error cancelling reservation:", error);
+      }).catch(e => console.error(e));
     }
+
+    // Optimistically update UI
+    setCancellingId(null);
+    playSuccess();
+
+    updateDoc(doc(db, 'reservations', cancellingId), {
+      status: 'cancelled'
+    }).catch((error) => {
+      console.error("Error cancelling reservation:", error);
+      // We don't restore the ID or show error here since it might just be offline,
+      // and it will sync when online.
+    });
   };
 
   const resetForm = () => {
@@ -247,6 +255,7 @@ export default function Reservations() {
     setReservationTime('');
     setPaymentMethod('Efectivo');
     setPhotoToUpload(null);
+    setFormError(null);
   };
 
   const getStatusBadge = (status: string, date: string) => {
@@ -268,7 +277,7 @@ export default function Reservations() {
       {loading && (
         <div className="fixed inset-0 bg-white/60 backdrop-blur-sm z-[200] flex items-center justify-center">
           <div className="flex flex-col items-center gap-4">
-            <div className="text-6xl animate-spin drop-shadow-2xl">🔱</div>
+            <div className="text-6xl animate-spin">🔱</div>
             <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] animate-pulse">Procesando Reserva...</p>
           </div>
         </div>
@@ -350,6 +359,12 @@ export default function Reservations() {
                 <Trash2 size={40} />
               </div>
               <h3 className="text-2xl font-black uppercase tracking-tight text-slate-900 mb-2">¿Cancelar Reserva?</h3>
+              {formError && (
+                <div className="mb-4 p-4 bg-red-50 text-red-600 rounded-2xl font-bold flex items-center justify-center gap-2">
+                  <AlertCircle className="shrink-0" />
+                  <p className="text-[10px] sm:text-xs">{formError}</p>
+                </div>
+              )}
               <p className="text-slate-500 font-medium mb-4">Esta acción no se puede deshacer y la habitación quedará disponible.</p>
               
               {(() => {
@@ -372,7 +387,7 @@ export default function Reservations() {
               
               <div className="grid grid-cols-2 gap-4">
                 <button
-                  onClick={() => { playClick(); setCancellingId(null); }}
+                  onClick={() => { playClick(); setCancellingId(null); setFormError(null); }}
                   className="py-4 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-2xl font-bold transition-colors"
                 >
                   No, Volver
@@ -399,6 +414,13 @@ export default function Reservations() {
                 <X size={28} />
               </button>
             </div>
+
+            {formError && (
+              <div className="mb-6 p-4 bg-red-50 text-red-600 rounded-2xl font-bold flex items-center gap-2">
+                <AlertCircle className="shrink-0" />
+                <p className="text-sm">{formError}</p>
+              </div>
+            )}
 
             <form onSubmit={handleAddReservation} className="space-y-6">
               <div>

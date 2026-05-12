@@ -100,15 +100,19 @@ export default function Expenses() {
     setIsSaving(true);
     try {
       if (editingExpenseId) {
-        await updateDoc(doc(db, 'expenses', editingExpenseId), {
+        updateDoc(doc(db, 'expenses', editingExpenseId), {
           description: form.description,
           amount: Number(form.amount),
           category: form.category,
           photo: photo || null
+        }).catch(err => {
+            console.error(err);
+            playError();
+            alert('Error al guardar el gasto.');
         });
         setEditingExpenseId(null);
       } else {
-        await addDoc(collection(db, 'expenses'), {
+        addDoc(collection(db, 'expenses'), {
           description: form.description,
           amount: Number(form.amount),
           category: form.category,
@@ -117,11 +121,16 @@ export default function Expenses() {
           hostId: appUser?.id || '',
           shiftId: activeShift?.id || null,
           photo: photo || null
+        }).catch(err => {
+            console.error(err);
+            playError();
+            alert('Error al guardar el gasto.');
         });
       }
       playSuccess();
       setForm({ description: '', amount: '', category: 'Otros' });
       setPhoto(null);
+      setIsSaving(false);
     } catch (err) {
       playError();
       console.error(err);
@@ -160,23 +169,17 @@ export default function Expenses() {
     setEditingExpenseId(expense.id);
   };
 
-  const handleDelete = async () => {
+  const handleDelete = () => {
     if (!confirmDeleteId) return;
     playClick();
-    try {
-      await deleteDoc(doc(db, 'expenses', confirmDeleteId));
-      playSuccess();
-      setConfirmDeleteId(null);
-    } catch (err) {
-      playError();
-      console.error(err);
-      alert('Error al eliminar');
-    }
+    deleteDoc(doc(db, 'expenses', confirmDeleteId)).catch(console.error);
+    playSuccess();
+    setConfirmDeleteId(null);
   };
 
   if (loading) return (
     <div className="fixed inset-0 bg-white flex flex-col items-center justify-center">
-      <div className="text-7xl animate-spin drop-shadow-2xl mb-4">🔱</div>
+      <div className="text-7xl animate-spin mb-4">🔱</div>
       <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.4em] animate-pulse">Cargando Gastos...</p>
     </div>
   );
@@ -186,7 +189,7 @@ export default function Expenses() {
       {isSaving && (
         <div className="fixed inset-0 bg-white/60 backdrop-blur-sm z-[200] flex items-center justify-center">
           <div className="flex flex-col items-center gap-4">
-            <div className="text-6xl animate-spin drop-shadow-2xl">🔱</div>
+            <div className="text-6xl animate-spin">🔱</div>
             <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] animate-pulse">Guardando Gasto...</p>
           </div>
         </div>

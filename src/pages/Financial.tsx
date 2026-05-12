@@ -348,7 +348,7 @@ export default function Financial() {
       {(loading || savingInvoice) && (
         <div className="fixed inset-0 bg-white/60 backdrop-blur-sm z-[200] flex items-center justify-center">
           <div className="flex flex-col items-center gap-4">
-            <div className="text-6xl animate-spin drop-shadow-2xl">🔱</div>
+            <div className="text-6xl animate-spin">🔱</div>
             <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] animate-pulse">
               {savingInvoice ? 'Guardando Configuración...' : 'Procesando Balance...'}
             </p>

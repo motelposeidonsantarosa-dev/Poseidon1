@@ -93,7 +93,7 @@ export default function Catalog() {
 
   if (loading) return (
     <div className="fixed inset-0 bg-slate-950 flex flex-col items-center justify-center">
-      <div className="text-7xl animate-spin drop-shadow-2xl mb-4 text-amber-500">🔱</div>
+      <div className="text-7xl animate-spin mb-4 text-amber-500">🔱</div>
       <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.4em] animate-pulse">Cargando Menú...</p>
     </div>
   );

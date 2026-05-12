@@ -200,9 +200,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const logout = async () => {
-    if (appUser?.role === 'host') {
+    // We already checked active shifts above, so capture appUser and sessionId before clearing local state
+    const currentAppUser = appUser;
+    const currentSessionId = localStorage.getItem('poseidon_session_id');
+
+    if (currentAppUser?.role === 'host') {
       try {
-        const q = query(collection(db, 'shifts'), where('hostId', '==', appUser.id), where('status', '==', 'active'));
+        const q = query(collection(db, 'shifts'), where('hostId', '==', currentAppUser.id), where('status', '==', 'active'));
         const activeShiftsSnap = await getDocs(q);
         if (!activeShiftsSnap.empty) {
           throw new Error('Debes terminar tu turno antes de cerrar sesión.');
@@ -216,27 +220,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     }
     
-    // Clear session in Firestore
-    if (appUser) {
-      const currentSessionId = localStorage.getItem('poseidon_session_id');
-      if (currentSessionId) {
-        try {
-          const userRef = doc(db, 'app_users', appUser.id);
-          const userDoc = await getDoc(userRef);
-          if (userDoc.exists()) {
-            const data = userDoc.data() as AppUser;
-            const updatedSessions = (data.activeSessions || []).filter(s => s !== currentSessionId);
-            await updateDoc(userRef, { activeSessions: updatedSessions });
-          }
-        } catch (e) {
-          console.warn('Could not clear session in Firestore (possibly offline), completing local logout.', e);
-        }
-      }
-    }
-
+    // Clear local state instantly for optimistic UI response
     setAppUser(null);
     localStorage.removeItem('poseidon_user_id');
     localStorage.removeItem('poseidon_session_id');
+
+    // Clear session in Firestore (fire-and-forget)
+    if (currentAppUser && currentSessionId) {
+      const userRef = doc(db, 'app_users', currentAppUser.id);
+      getDoc(userRef).then((userDoc) => {
+        if (userDoc.exists()) {
+          const data = userDoc.data() as AppUser;
+          const updatedSessions = (data.activeSessions || []).filter(s => s !== currentSessionId);
+          updateDoc(userRef, { activeSessions: updatedSessions }).catch(e => {
+            console.warn('Could not clear session in Firestore on update (possibly offline).', e);
+          });
+        }
+      }).catch(e => {
+        console.warn('Could not clear session in Firestore (possibly offline).', e);
+      });
+    }
   };
 
   const updatePin = async (id: string, newPin: string) => {
