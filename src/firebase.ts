@@ -1,29 +1,40 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
-import { initializeFirestore, enableMultiTabIndexedDbPersistence, CACHE_SIZE_UNLIMITED, setLogLevel } from 'firebase/firestore';
+import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, CACHE_SIZE_UNLIMITED, setLogLevel } from 'firebase/firestore';
 import firebaseConfig from '../firebase-applet-config.json';
 
 // Suppress harmless 'update time in the future' warnings from Firestore
 setLogLevel('error');
 
+// Global error handler to catch corrupted Firestore cache (e.g., Unexpected state ID: b815)
+window.addEventListener('unhandledrejection', async (event) => {
+  const errText = event.reason ? event.reason.toString() : '';
+  if (errText.includes('Unexpected state') || errText.includes('b815') || errText.includes('IndexedDbTargetCache')) {
+    console.error("Corrupted Firestore Cache Detected! Wiping and reloading...");
+    try {
+      const dbs = await indexedDB.databases();
+      for (const db of dbs) {
+        if (db.name && db.name.includes('firestore')) {
+          indexedDB.deleteDatabase(db.name);
+        }
+      }
+    } catch (e) {
+      console.error(e);
+    }
+    // Force reload
+    window.location.reload();
+  }
+});
+
 const app = initializeApp(firebaseConfig);
 
 // Inicializar Firestore con cache ilimitada
 export const db = initializeFirestore(app, {
-  cacheSizeBytes: CACHE_SIZE_UNLIMITED
+  localCache: persistentLocalCache({
+    tabManager: persistentMultipleTabManager(),
+    cacheSizeBytes: CACHE_SIZE_UNLIMITED
+  })
 }, firebaseConfig.firestoreDatabaseId);
 
-// Habilitar persistencia offline multi-pestaña
-enableMultiTabIndexedDbPersistence(db).catch((err) => {
-  if (err.code === 'failed-precondition') {
-    // Múltiples pestañas abiertas, pero el navegador no soporta multi-tab.
-    console.warn('Persistencia offline activa en otra pestaña.');
-  } else if (err.code === 'unimplemented') {
-    // El navegador no soporta persistencia.
-    console.warn('El navegador no soporta persistencia offline.');
-  } else {
-    console.error('Error al habilitar persistencia offline:', err);
-  }
-});
-
 export const auth = getAuth(app);
+
