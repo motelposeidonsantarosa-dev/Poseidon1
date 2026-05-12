@@ -248,7 +248,7 @@ export default function Incidents() {
                   {incident.photo && (
                     <div 
                       className="rounded-xl overflow-hidden border border-slate-100 shadow-inner cursor-zoom-in group/img relative"
-                      onClick={() => setViewPhoto(incident.photo!)}
+                      onClick={() => { playClick(); setViewPhoto(incident.photo!); }}
                     >
                       <img src={incident.photo} alt="Evidencia" className="w-full h-20 sm:h-40 lg:h-20 object-cover group-hover/img:scale-105 transition-transform" />
                     </div>
@@ -359,7 +359,7 @@ export default function Incidents() {
                     <img src={photo} alt="Evidencia" className="w-full h-full object-cover" />
                     <button 
                       type="button"
-                      onClick={() => setPhoto(null)}
+                      onClick={() => { playClick(); setPhoto(null); }}
                       className="absolute top-3 right-3 bg-red-500 text-white p-2 rounded-xl shadow-lg"
                     >
                       <X size={20} />
@@ -368,7 +368,7 @@ export default function Incidents() {
                 ) : (
                   <button
                     type="button"
-                    onClick={() => fileInputRef.current?.click()}
+                    onClick={() => { playClick(); fileInputRef.current?.click(); }}
                     className="w-full py-8 bg-slate-50 border-2 border-dashed border-slate-200 rounded-3xl flex flex-col items-center justify-center gap-3 text-slate-400 hover:border-blue-400 hover:text-blue-500 transition-all group"
                   >
                     <div className="p-4 bg-white rounded-2xl shadow-sm group-hover:scale-110 transition-transform">
@@ -450,7 +450,7 @@ export default function Incidents() {
               )}
               
               <button
-                onClick={() => setShowResolutionModal(null)}
+                onClick={() => { playClick(); setShowResolutionModal(null); }}
                 className="w-full p-4 text-slate-400 font-black uppercase text-[10px] hover:text-slate-600"
               >
                 Cancelar
@@ -473,7 +473,7 @@ export default function Incidents() {
             </div>
             <div className="flex gap-3">
               <button 
-                onClick={() => setConfirmDeleteId(null)}
+                onClick={() => { playClick(); setConfirmDeleteId(null); }}
                 className="flex-1 py-4 bg-slate-100 hover:bg-slate-200 text-slate-600 font-black uppercase text-xs rounded-2xl transition-all"
               >
                 Cancelar
@@ -493,12 +493,12 @@ export default function Incidents() {
       {viewPhoto && (
         <div 
           className="fixed inset-0 bg-slate-900/90 backdrop-blur-md flex items-center justify-center z-[100] p-4 cursor-zoom-out"
-          onClick={() => setViewPhoto(null)}
+          onClick={() => { playClick(); setViewPhoto(null); }}
         >
           <div className="relative max-w-5xl w-full h-full flex items-center justify-center">
             <button 
               className="absolute top-0 right-0 p-4 text-white bg-black/20 rounded-full hover:bg-black/40 transition-colors"
-              onClick={() => setViewPhoto(null)}
+              onClick={() => { playClick(); setViewPhoto(null); }}
             >
               <X size={32} />
             </button>

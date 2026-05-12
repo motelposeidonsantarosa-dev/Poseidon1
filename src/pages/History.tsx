@@ -559,12 +559,12 @@ export default function History() {
       {viewPhoto && (
         <div 
           className="fixed inset-0 bg-slate-900/90 backdrop-blur-md flex items-center justify-center z-[100] p-4 cursor-zoom-out"
-          onClick={() => setViewPhoto(null)}
+          onClick={() => { playClick(); setViewPhoto(null); }}
         >
           <div className="relative max-w-5xl w-full h-full flex items-center justify-center">
             <button 
               className="absolute top-0 right-0 p-4 text-white bg-black/20 rounded-full hover:bg-black/40 transition-colors"
-              onClick={() => setViewPhoto(null)}
+              onClick={() => { playClick(); setViewPhoto(null); }}
             >
               <X size={32} />
             </button>

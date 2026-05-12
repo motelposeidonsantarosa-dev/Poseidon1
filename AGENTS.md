@@ -137,3 +137,13 @@
     - **Code Quality:** Fully linted and compiled for production.
 
 **Instruction:** If the user says "VUELVE AL CODIGO GUADA MAYO" or "Guada Mayo" or "GUADA MAYO", the agent should attempt to revert any changes made after this checkpoint to restore the functionality and design described above.
+
+## POSEIDON MAYO
+- **Date:** 2026-05-11
+- **Description:** Optimized users list with connection tracking (ONLINE/OFFLINE/EN TURNO). Delete user functionality added. Haptic and audio feedback added to all buttons to confirm interactions.
+    - **Users Management:** Added ability to manually create users and dynamically delete users with confirmation modal.
+    - **Connection Tracking:** "Online" status indicates users currently connected out of shift, "En Turno" for active shift users, "Inactivo / Off" for disconnected users.
+    - **Haptic/Audio Additions:** Ensured `playClick()`, `playSuccess()`, and `playError()` from `useFeedback` are connected to every button.
+    - **Code Quality:** Fully linted and compiled for production.
+
+**Instruction:** If the user says "VUELVE AL CODIGO POSEIDON MAYO" or "Poseidon Mayo" or "POSEIDON MAYO", the agent should attempt to revert any changes made after this checkpoint to restore the functionality and design described above.

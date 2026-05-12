@@ -256,7 +256,7 @@ export default function Expenses() {
                   <img src={photo} alt="Vista previa" className="w-full h-full object-cover" />
                   <button 
                     type="button"
-                    onClick={() => setPhoto(null)}
+                    onClick={() => { playClick(); setPhoto(null); }}
                     className="absolute top-3 right-3 bg-red-500 text-white p-2 rounded-xl shadow-lg transition-transform active:scale-90"
                   >
                     <X size={20} />
@@ -423,7 +423,7 @@ export default function Expenses() {
             </div>
             <div className="flex gap-3">
               <button 
-                onClick={() => setConfirmDeleteId(null)}
+                onClick={() => { playClick(); setConfirmDeleteId(null); }}
                 className="flex-1 py-4 bg-slate-100 hover:bg-slate-200 text-slate-600 font-black uppercase text-xs rounded-2xl transition-all"
               >
                 Cancelar

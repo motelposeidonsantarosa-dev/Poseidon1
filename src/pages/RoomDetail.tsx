@@ -1051,7 +1051,7 @@ export default function RoomDetail() {
           <div className="bg-white rounded-3xl p-6 xl:p-8 max-w-md w-full shadow-2xl max-h-[95vh] overflow-y-auto custom-scrollbar">
             <div className="flex justify-between items-center mb-6">
               <h3 className="text-xl font-bold text-slate-900">Forma de Pago</h3>
-              <button onClick={() => setShowPaymentModal(false)} className="text-slate-400 hover:text-slate-600">
+              <button onClick={() => { playClick(); setShowPaymentModal(false); }} className="text-slate-400 hover:text-slate-600">
                 <X size={24} />
               </button>
             </div>
@@ -1087,7 +1087,7 @@ export default function RoomDetail() {
                       <div className="relative inline-block">
                         <img src={transferPhoto} alt="Comprobante" className="max-h-48 rounded-lg shadow-md mx-auto" />
                         <button 
-                          onClick={() => setTransferPhoto(null)}
+                          onClick={() => { playClick(); setTransferPhoto(null); }}
                           className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 shadow-md"
                         >
                           <X size={16} />
@@ -1104,7 +1104,7 @@ export default function RoomDetail() {
                   <div className="flex flex-col gap-2">
                     {!transferPhoto ? (
                       <button
-                        onClick={() => fileInputRef.current?.click()}
+                        onClick={() => { playClick(); fileInputRef.current?.click(); }}
                         className="w-full py-4 bg-amber-600 hover:bg-amber-700 text-white font-black rounded-2xl text-lg flex items-center justify-center gap-2"
                       >
                         Adjuntar o Tomar Fotografía
@@ -1118,7 +1118,7 @@ export default function RoomDetail() {
                       </button>
                     )}
                     <button
-                      onClick={() => { setIsCapturingPhoto(false); setTransferPhoto(null); }}
+                      onClick={() => { playClick(); setIsCapturingPhoto(false); setTransferPhoto(null); }}
                       className="w-full py-2 text-slate-500 font-bold uppercase text-xs"
                     >
                       Volver
@@ -1184,7 +1184,7 @@ export default function RoomDetail() {
               No puedes registrar servicios ni productos sin haber iniciado tu turno. Por favor, ve al <strong>Tablero</strong> e inicia tu turno.
             </p>
             <button 
-              onClick={() => navigate('/')}
+              onClick={() => { playClick(); navigate("/"); }}
               className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-xl text-lg shadow-lg"
             >
               Ir al Tablero

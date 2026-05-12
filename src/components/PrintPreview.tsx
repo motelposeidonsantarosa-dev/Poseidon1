@@ -2,8 +2,10 @@ import React, { useState, useEffect, useRef } from 'react';
 import { X, Printer, Share2, Download } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
+import { useFeedback } from '../hooks/useFeedback';
 
 export const PrintPreview = () => {
+  const { playClick } = useFeedback();
   const [html, setHtml] = useState<string | null>(null);
   const [isOpen, setIsOpen] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -182,7 +184,7 @@ export const PrintPreview = () => {
             <Printer size={20} /> Vista Previa del Ticket
           </h3>
           <button 
-            onClick={() => setIsOpen(false)}
+            onClick={() => { playClick(); setIsOpen(false); }}
             className="p-2 hover:bg-white/10 rounded-full transition-colors"
           >
             <X size={24} />
@@ -200,6 +202,7 @@ export const PrintPreview = () => {
         <div className="p-4 sm:p-6 bg-white border-t border-slate-200 grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-4">
           <button
             onClick={() => {
+              playClick();
               if ('vibrate' in navigator) navigator.vibrate(10);
               setIsOpen(false);
             }}
@@ -209,6 +212,7 @@ export const PrintPreview = () => {
           </button>
           <button
             onClick={() => {
+              playClick();
               if ('vibrate' in navigator) navigator.vibrate(10);
               handleSave();
             }}
@@ -219,6 +223,7 @@ export const PrintPreview = () => {
           </button>
           <button
             onClick={() => {
+              playClick();
               if ('vibrate' in navigator) navigator.vibrate(10);
               handleShare();
             }}
@@ -229,6 +234,7 @@ export const PrintPreview = () => {
           </button>
           <button
             onClick={() => {
+              playClick();
               if ('vibrate' in navigator) navigator.vibrate(10);
               handlePrint();
             }}

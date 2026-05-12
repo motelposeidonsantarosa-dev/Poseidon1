@@ -1057,7 +1057,7 @@ export default function Dashboard() {
           <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-xl">
             <div className="flex justify-between items-center mb-6">
               <h3 className="text-xl font-bold text-slate-900">Añadir Habitación</h3>
-              <button onClick={() => setShowAddRoom(false)} className="text-slate-400 hover:text-slate-600">
+              <button onClick={() => { playClick(); setShowAddRoom(false); }} className="text-slate-400 hover:text-slate-600">
                 <X size={24} />
               </button>
             </div>
@@ -1069,7 +1069,7 @@ export default function Dashboard() {
               placeholder="Nombre de la habitación"
             />
             <div className="flex justify-end gap-3">
-              <button onClick={() => setShowAddRoom(false)} className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg font-medium">Cancelar</button>
+              <button onClick={() => { playClick(); setShowAddRoom(false); }} className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg font-medium">Cancelar</button>
               <button onClick={handleAddRoom} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium">Añadir</button>
             </div>
           </div>
@@ -1082,7 +1082,7 @@ export default function Dashboard() {
           <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-xl">
             <div className="flex justify-between items-center mb-6">
               <h3 className="text-xl font-bold text-slate-900">Editar Nombre</h3>
-              <button onClick={() => setEditingRoom(null)} className="text-slate-400 hover:text-slate-600">
+              <button onClick={() => { playClick(); setEditingRoom(null); }} className="text-slate-400 hover:text-slate-600">
                 <X size={24} />
               </button>
             </div>
@@ -1094,7 +1094,7 @@ export default function Dashboard() {
               placeholder="Nuevo nombre"
             />
             <div className="flex justify-end gap-3">
-              <button onClick={() => setEditingRoom(null)} className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg font-medium">Cancelar</button>
+              <button onClick={() => { playClick(); setEditingRoom(null); }} className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg font-medium">Cancelar</button>
               <button onClick={handleEditRoomName} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium">Guardar</button>
             </div>
           </div>
@@ -1126,7 +1126,7 @@ export default function Dashboard() {
                   <p className="text-[10px] text-red-600 mt-1 uppercase font-black tracking-widest">Sólo puede haber un host en turno a la vez.</p>
                 </div>
                 <button 
-                  onClick={logout}
+                  onClick={() => { playClick(); logout(); }}
                   className="w-full bg-slate-900 hover:bg-black text-white py-4 rounded-2xl font-black transition-all active:scale-95 uppercase tracking-wider text-sm shadow-xl"
                 >
                   Cerrar Sesión
@@ -1145,7 +1145,7 @@ export default function Dashboard() {
                     <PlayCircle size={20} /> Iniciar Turno Ahora
                   </button>
                   <button 
-                    onClick={logout}
+                    onClick={() => { playClick(); logout(); }}
                     className="w-full bg-slate-100 hover:bg-slate-200 text-slate-500 py-3 rounded-2xl font-bold transition-all active:scale-95 uppercase text-[10px] tracking-widest"
                   >
                     Salir
@@ -1176,7 +1176,7 @@ export default function Dashboard() {
                 <h3 className="text-2xl font-black text-slate-900 uppercase tracking-tight">Venta Directa</h3>
               </div>
               <button 
-                onClick={() => setShowDirectSale(false)} 
+                onClick={() => { playClick(); setShowDirectSale(false); }} 
                 className="p-2 hover:bg-slate-100 rounded-xl transition-colors text-slate-400"
               >
                 <X size={24} />
@@ -1398,7 +1398,7 @@ export default function Dashboard() {
                       <div className="p-3 bg-amber-50 rounded-2xl border border-amber-100">
                         <div className="flex justify-between items-center mb-2">
                           <span className="text-[9px] font-black text-amber-700 uppercase tracking-widest">Pago: {directSalePaymentMethod}</span>
-                          <button onClick={() => setDirectSalePaymentMethod(null)} className="text-amber-400 hover:text-amber-600">
+                          <button onClick={() => { playClick(); setDirectSalePaymentMethod(null); }} className="text-amber-400 hover:text-amber-600">
                             <X size={14} />
                           </button>
                         </div>
@@ -1409,7 +1409,7 @@ export default function Dashboard() {
                               <div className="relative">
                                 <img src={directSalePhoto} alt="Comprobante" className="w-full h-24 object-cover rounded-xl shadow-md" />
                                 <button 
-                                  onClick={() => setDirectSalePhoto(null)} 
+                                  onClick={() => { playClick(); setDirectSalePhoto(null); }} 
                                   className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 shadow-lg"
                                 >
                                   <X size={12} />
@@ -1417,7 +1417,7 @@ export default function Dashboard() {
                               </div>
                             ) : (
                               <button 
-                                onClick={() => directFileInputRef.current?.click()}
+                                onClick={() => { playClick(); directFileInputRef.current?.click(); }}
                                 className="w-full py-4 bg-amber-50 text-amber-600 border-2 border-dashed border-amber-200 rounded-xl font-bold flex flex-col items-center gap-2 hover:bg-amber-100 transition-colors"
                               >
                                 <Camera size={20} />
@@ -1444,7 +1444,7 @@ export default function Dashboard() {
                       </button>
                       
                       <button 
-                        onClick={() => setDirectSalePaymentMethod(null)}
+                        onClick={() => { playClick(); setDirectSalePaymentMethod(null); }}
                         className="w-full py-1 text-slate-400 font-bold uppercase text-[9px] tracking-widest"
                       >
                         Cancelar
@@ -1481,7 +1481,7 @@ export default function Dashboard() {
                 Cancelar
               </button>
               <button 
-                onClick={confirmDeleteRoom}
+                onClick={() => { playClick(); confirmDeleteRoom(); }}
                 className="flex-1 py-4 bg-red-500 hover:bg-red-600 text-white font-bold rounded-2xl transition-all shadow-lg shadow-red-500/30 uppercase tracking-widest text-[10px] active:scale-95"
               >
                 Eliminar

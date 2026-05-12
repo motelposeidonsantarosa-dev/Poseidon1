@@ -110,7 +110,7 @@ export default function Catalog() {
             >
               <ArrowLeft size={20} />
             </button>
-            <div className="text-center md:text-left cursor-pointer" onClick={() => navigate('/')}>
+            <div className="text-center md:text-left cursor-pointer" onClick={() => { playClick(); navigate("/"); }}>
               <h1 className="text-2xl font-black uppercase tracking-tighter flex items-center gap-2 justify-center md:justify-start leading-none mb-1">
                  POSEIDÓN <span className="text-xl">🔱</span>
               </h1>
@@ -318,7 +318,7 @@ export default function Catalog() {
       {selectedItem && (
         <div className="fixed inset-0 bg-slate-950/95 backdrop-blur-xl z-[100] flex items-center justify-center p-0 md:p-8">
           <button 
-            onClick={() => setSelectedItem(null)}
+            onClick={() => { playClick(); setSelectedItem(null); }}
             className="absolute top-6 right-6 z-[110] w-14 h-14 bg-white/10 hover:bg-red-500 rounded-full flex items-center justify-center text-white transition-all active:scale-90"
           >
             <X size={32} />
@@ -368,7 +368,7 @@ export default function Catalog() {
             // Regular Product/Room Detail
             <div className="bg-white w-full max-w-lg rounded-[3rem] overflow-hidden shadow-2xl relative animate-in zoom-in-95 duration-200">
               <button 
-                onClick={() => setSelectedItem(null)}
+                onClick={() => { playClick(); setSelectedItem(null); }}
                 className="absolute top-6 right-6 z-20 w-12 h-12 bg-white/90 backdrop-blur-md rounded-full shadow-xl flex items-center justify-center text-slate-950 hover:bg-red-500 hover:text-white transition-all active:scale-90 shadow-red-100/20"
               >
                 <X size={24} />
@@ -433,7 +433,7 @@ export default function Catalog() {
 
                   <div className="pt-4">
                     <button
-                      onClick={() => setSelectedItem(null)}
+                      onClick={() => { playClick(); setSelectedItem(null); }}
                       className="w-full bg-slate-900 text-white py-5 rounded-2xl font-black uppercase tracking-[0.2em] shadow-2xl shadow-slate-200 active:scale-95 transition-all"
                     >
                       Cerrar Detalle

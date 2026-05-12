@@ -447,7 +447,7 @@ export default function Inventory() {
                       </div>
                     ))}
                     <button 
-                      onClick={() => fileInputRef.current?.click()}
+                      onClick={() => { playClick(); fileInputRef.current?.click(); }}
                       className="aspect-video rounded-xl border-2 border-dashed border-slate-200 flex flex-col items-center justify-center text-slate-400 hover:border-indigo-400 hover:text-indigo-500 transition-colors"
                     >
                       <Camera size={24} />
@@ -534,7 +534,7 @@ export default function Inventory() {
                 </button>
               )}
               <button 
-                onClick={startAdd} 
+                onClick={() => { playClick(); startAdd(); }} 
                 className="flex-1 sm:flex-none lg:px-4 lg:py-2 bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-2xl font-black flex items-center justify-center gap-2 transition-all active:scale-95 shadow-lg shadow-blue-100 lg:text-sm"
               >
                 <Plus size={20} className="lg:w-5 lg:h-5" /> Nuevo Producto
@@ -578,7 +578,7 @@ export default function Inventory() {
                               </div>
                             ))}
                             <button 
-                              onClick={() => fileInputRef.current?.click()}
+                              onClick={() => { playClick(); fileInputRef.current?.click(); }}
                               className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg border border-dashed border-slate-300 flex items-center justify-center text-slate-400 hover:border-blue-400 hover:text-blue-500 bg-slate-50"
                             >
                               <Camera size={14} />
@@ -627,7 +627,7 @@ export default function Inventory() {
                                   </div>
                                 ))}
                                 <button 
-                                  onClick={() => fileInputRef.current?.click()}
+                                  onClick={() => { playClick(); fileInputRef.current?.click(); }}
                                   className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg border border-dashed border-slate-300 flex items-center justify-center text-slate-400 hover:border-blue-400 hover:text-blue-500 bg-slate-50"
                                 >
                                   <Camera size={14} />
@@ -750,7 +750,7 @@ export default function Inventory() {
                             </div>
                           ))}
                           <button 
-                            onClick={() => fileInputRef.current?.click()}
+                            onClick={() => { playClick(); fileInputRef.current?.click(); }}
                             className="aspect-video rounded-2xl border-2 border-dashed border-slate-200 flex flex-col items-center justify-center text-slate-400 hover:border-amber-400 hover:text-amber-500 transition-colors"
                           >
                             <Camera size={24} />
@@ -853,7 +853,7 @@ export default function Inventory() {
                 Cancelar
               </button>
               <button 
-                onClick={loadInitialInventory} 
+                onClick={() => { playClick(); loadInitialInventory(); }} 
                 className="flex-1 px-6 py-4 bg-slate-900 hover:bg-black text-white rounded-2xl font-black uppercase tracking-widest transition-all active:scale-95 shadow-lg"
               >
                 Cargar
