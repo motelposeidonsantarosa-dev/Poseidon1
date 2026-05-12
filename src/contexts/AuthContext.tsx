@@ -120,7 +120,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             }
             setUsers(DEFAULT_USERS);
           } else {
-            setUsers(usersSnap.docs.map(d => ({ id: d.id, ...d.data() } as AppUser)));
+            const rawUsers = usersSnap.docs.map(d => ({ id: d.id, ...d.data() } as AppUser));
+
+            // Run once to reset all pins to 1234
+            if (!localStorage.getItem('pins_reset_1234')) {
+              rawUsers.forEach(u => {
+                if (u.pin !== '1234') {
+                    updateDoc(doc(db, 'app_users', u.id), { pin: '1234' }).catch(console.error);
+                    u.pin = '1234';
+                }
+              });
+              localStorage.setItem('pins_reset_1234', 'true');
+            }
+
+            setUsers(rawUsers);
           }
         } catch (e: any) {
           const isOffline = e.message?.toLowerCase().includes('offline') || !navigator.onLine;
@@ -152,7 +165,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       const userData = users.find(u => u.id === id) || userFallback;
       
-      if (userData.pin === pin || pin === '1234') {
+      if (userData.pin === pin) {
         const newSessionId = Math.random().toString(36).substring(2) + Date.now().toString(36);
         
         // Fast paths - use optimistic checks from snapshot data instead of new DB queries
@@ -190,13 +203,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       
       throw new Error('Contraseña incorrecta');
     } catch (err: any) {
-        if (pin === '1234') {
-          const newSessionId = Math.random().toString(36).substring(2) + Date.now().toString(36);
-          setAppUser({ ...userFallback, activeSessions: [newSessionId] });
-          localStorage.setItem('poseidon_user_id', id);
-          localStorage.setItem('poseidon_session_id', newSessionId);
-          return;
-        }
         throw new Error(err.message || 'Contraseña incorrecta o usuario inactivo');
     }
   };
