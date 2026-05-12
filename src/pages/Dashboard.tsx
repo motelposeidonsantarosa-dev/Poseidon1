@@ -841,6 +841,28 @@ export default function Dashboard() {
 
   return (
     <div className="max-w-7xl mx-auto">
+      {appUser?.role === 'admin' && (
+        <button 
+          onClick={() => {
+            playClick();
+            navigate('/migrate');
+          }}
+          className="mb-6 w-full bg-slate-900 border border-amber-400/50 text-amber-400 p-4 rounded-xl flex items-center justify-between shadow-[0_0_15px_rgba(251,191,36,0.3)] hover:shadow-[0_0_25px_rgba(251,191,36,0.5)] transition-all active:scale-95 group overflow-hidden relative"
+        >
+          <div className="absolute inset-0 bg-amber-400/10 skew-x-12 -translate-x-[150%] group-hover:translate-x-[150%] transition-transform duration-1000"></div>
+          <div className="flex items-center gap-3 relative z-10">
+            <div className="w-10 h-10 bg-amber-400/20 rounded-full flex items-center justify-center shrink-0">
+              <span className="text-xl">🚀</span>
+            </div>
+            <div className="text-left filter drop-shadow-[0_0_5px_rgba(251,191,36,0.5)]">
+              <h3 className="font-bold text-sm md:text-base">MIGRACIÓN A NUEVA BASE DE DATOS</h3>
+              <p className="text-xs md:text-sm opacity-80">Toca aquí para iniciar el copiado final de los datos.</p>
+            </div>
+          </div>
+          <PlayCircle size={24} className="opacity-50 group-hover:opacity-100 transition-opacity" />
+        </button>
+      )}
+
       {(isNavigating || isDirectSaleSaving) && (
         <div className="fixed inset-0 bg-white/60 backdrop-blur-sm z-[200] flex items-center justify-center">
           <div className="flex flex-col items-center gap-4">

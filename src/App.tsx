@@ -89,6 +89,7 @@ function AppRoutes() {
       <Route path="/" element={<Landing />} />
       <Route path="/catalog" element={<Catalog />} />
       <Route path="/login" element={<Login />} />
+      <Route path="/migrate" element={<Migration />} />
       <Route path="/dashboard" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
         <Route index element={<Dashboard />} />
         <Route path="room/:id" element={<RoomDetail />} />
@@ -108,10 +109,6 @@ function AppRoutes() {
 import { Migration } from './Migration';
 
 export default function App() {
-  if (window.location.hash === '#migrate') {
-    return <Migration />;
-  }
-
   return (
     <AuthProvider>
       <BrowserRouter>

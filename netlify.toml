@@ -5,3 +5,8 @@
 [build.environment]
   SECRETS_SCAN_SMART_DETECTION_ENABLED = "false"
   SECRETS_SCAN_SMART_DETECTION_OMIT_VALUES = "AIzaSyB4oHOXnYgshaZr183gWPha6EYMuuoZV6Q"
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200

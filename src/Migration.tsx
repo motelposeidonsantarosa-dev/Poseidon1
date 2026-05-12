@@ -47,14 +47,21 @@ export function Migration() {
           addLog(`Found ${docs.length} documents in ${col}. Copying...`);
           
           let successCount = 0;
-          for (const d of docs) {
-            try {
-              await setDoc(doc(newDb, col, d.id), d.data());
-              successCount++;
-            } catch(err: any) {
-              addLog(`Error writing ${col}/${d.id}: ${err.message}`);
-            }
-          }
+          
+          await Promise.race([
+            (async () => {
+              for (const d of docs) {
+                try {
+                  await setDoc(doc(newDb, col, d.id), d.data());
+                  successCount++;
+                } catch(err: any) {
+                  addLog(`Error al escribir en la nueva base de datos ${col}/${d.id}: ${err.message}`);
+                }
+              }
+            })(),
+            new Promise((_, reject) => setTimeout(() => reject(new Error("Firebase no responde (timeout 15s). Verifica que la base de datos esté creada y en Modo de Prueba.")), 15000))
+          ]);
+
           addLog(`Copied ${successCount}/${docs.length} documents for ${col}.`);
         } catch (err: any) {
           addLog(`Could not read ${col} (maybe empty or permission issue): ${err.message}`);
@@ -77,7 +84,7 @@ export function Migration() {
       
       {!appUser || appUser.role !== 'admin' ? (
         <div className="p-4 bg-red-100 text-red-800 rounded-lg mb-4">
-          <strong>Atención:</strong> Debes iniciar sesión con una cuenta de <strong>Administrador</strong> en la app antes de usar esta página. Vuelve a la página principal, inicia sesión y luego vuelve a cargar esta URL agregando #migrate al final.
+          <strong>Atención:</strong> Debes iniciar sesión con una cuenta de <strong>Administrador</strong> en la app antes de usar esta página. Vuelve a la página principal, inicia sesión y luego vuelve a cargar la URL <strong>/migrate</strong>.
         </div>
       ) : (
         <button 
