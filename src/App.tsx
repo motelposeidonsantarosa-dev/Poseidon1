@@ -16,7 +16,7 @@ import Reservations from './pages/Reservations';
 import Incidents from './pages/Incidents';
 import { PrintPreview } from './components/PrintPreview';
 
-import { doc, getDocFromServer } from 'firebase/firestore';
+import { doc } from 'firebase/firestore';
 import { db } from './firebase';
 import { KeyRound, X } from 'lucide-react';
 
@@ -89,7 +89,6 @@ function AppRoutes() {
       <Route path="/" element={<Landing />} />
       <Route path="/catalog" element={<Catalog />} />
       <Route path="/login" element={<Login />} />
-      <Route path="/migrate" element={<Migration />} />
       <Route path="/dashboard" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
         <Route index element={<Dashboard />} />
         <Route path="room/:id" element={<RoomDetail />} />
@@ -105,8 +104,6 @@ function AppRoutes() {
     </Routes>
   );
 }
-
-import { Migration } from './Migration';
 
 export default function App() {
   return (

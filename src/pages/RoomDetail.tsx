@@ -550,7 +550,7 @@ export default function RoomDetail() {
       setShowNoShiftModal(true);
       return;
     }
-    updateDoc(doc(db, 'rooms', room.id), {
+    await updateDoc(doc(db, 'rooms', room.id), {
       status: 'Libre',
       startTime: null,
       endTime: null,
@@ -561,11 +561,10 @@ export default function RoomDetail() {
       basePrice: getServicePrice('Servicio Base', 60000),
       currentHostId: null,
       currentHostName: null
-    }).catch(err => {
-      console.error(err);
     });
     playSuccess();
-    navigate('/dashboard');
+    setIsNavigating(true);
+    setTimeout(() => navigate('/dashboard'), 300);
   };
 
   let timeLeftStr = '';
@@ -683,7 +682,8 @@ export default function RoomDetail() {
           <button 
             onClick={() => { 
                 playClick(); 
-                navigate('/dashboard');
+                setIsNavigating(true);
+                setTimeout(() => navigate('/dashboard'), 300);
             }} 
             className="p-2 sm:p-3 lg:p-2 bg-white hover:bg-slate-100 rounded-xl shadow-sm transition-colors border border-slate-200"
           >

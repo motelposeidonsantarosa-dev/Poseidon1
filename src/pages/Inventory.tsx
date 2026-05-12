@@ -71,8 +71,7 @@ export default function Inventory() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<Partial<Product>>({});
   const [isAdding, setIsAdding] = useState(false);
-  const [deletingId, setDeletingId] = useState<string | null>(null);
-  const [deletingType, setDeletingType] = useState<'product' | 'info' | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<{ id: string; type: 'product' | 'info' } | null>(null);
   const [showLoadBaseModal, setShowLoadBaseModal] = useState(false);
   const [activeTab, setActiveTab] = useState<'products' | 'rooms' | 'info'>('products');
   const [rooms, setRooms] = useState<Room[]>([]);
@@ -82,10 +81,8 @@ export default function Inventory() {
   useEffect(() => {
     const unsubProducts = onSnapshot(collection(db, 'products'), (snapshot) => {
       const prods = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Product));
-      // Deduplicate by name to prevent multiple entries of the same item
-      const unique = Array.from(new Map(prods.map(p => [p.name.toLowerCase(), p])).values());
-      unique.sort((a, b) => a.category.localeCompare(b.category) || a.name.localeCompare(b.name));
-      setProducts(unique);
+      prods.sort((a, b) => a.category.localeCompare(b.category) || a.name.localeCompare(b.name));
+      setProducts(prods);
       setLoading(false);
     }, (error) => {
       handleFirestoreError(error, OperationType.LIST, 'products');
@@ -232,8 +229,7 @@ export default function Inventory() {
 
   const handleDeleteInfo = (id: string) => {
     playClick();
-    setDeletingType('info');
-    setDeletingId(id);
+    setConfirmDelete({ id, type: 'info' });
   };
 
   const handleEdit = (product: Product) => {
@@ -289,22 +285,25 @@ export default function Inventory() {
     }
   };
 
-  const handleDelete = async () => {
-    playClick();
-    if (deletingId) {
-      setIsSaving(true);
-      try {
-        const collectionName = deletingType === 'info' ? 'promos' : 'products';
-        await deleteDoc(doc(db, collectionName, deletingId));
-        playSuccess();
-        setDeletingId(null);
-        setDeletingType(null);
-      } catch (err) {
-        playError();
-        handleFirestoreError(err, OperationType.DELETE, `${deletingType === 'info' ? 'promos' : 'products'}/${deletingId}`);
-      } finally {
-        setIsSaving(false);
-      }
+  const handleDelete = () => {
+    try {
+      playClick();
+      if (!confirmDelete) return;
+
+      const id = confirmDelete.id;
+      const type = confirmDelete.type;
+      
+      // Optimistic UI: Reset state immediately to close modal
+      setConfirmDelete(null);
+      
+      const collectionName = type === 'info' ? 'promos' : 'products';
+      deleteDoc(doc(db, collectionName, id)).catch(err => {
+        console.error("Error deleting item:", err);
+      });
+      playSuccess();
+    } catch (err) {
+      playError();
+      console.error("Error deleting item:", err);
     }
   };
 
@@ -699,7 +698,7 @@ export default function Inventory() {
                           ) : (
                             <div className="flex justify-end gap-1">
                               <button onClick={() => handleEdit(product)} className="p-1 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"><Edit2 size={14} /></button>
-                              <button onClick={() => { playClick(); setDeletingId(product.id); }} className="p-1 text-red-600 hover:bg-red-50 rounded-lg transition-colors"><Trash2 size={14} /></button>
+                              <button onClick={() => { playClick(); setConfirmDelete({ id: product.id, type: 'product' }); }} className="p-1 text-red-600 hover:bg-red-50 rounded-lg transition-colors"><Trash2 size={14} /></button>
                             </div>
                           )}
                         </td>
@@ -864,21 +863,21 @@ export default function Inventory() {
       )}
 
       {/* Delete Confirmation Modal */}
-      {deletingId && (
+      {confirmDelete && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
           <div className="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl animate-in zoom-in-95 duration-200">
-            <div className="text-5xl mb-4">{deletingType === 'info' ? '📋' : '🗑️'}</div>
+            <div className="text-5xl mb-4">{confirmDelete.type === 'info' ? '📋' : '🗑️'}</div>
             <h3 className="text-2xl font-black text-slate-900 mb-2 uppercase tracking-tight">
-              {deletingType === 'info' ? '¿Eliminar información?' : '¿Eliminar producto?'}
+              {confirmDelete.type === 'info' ? '¿Eliminar información?' : '¿Eliminar producto?'}
             </h3>
             <p className="text-slate-500 mb-8 font-medium">
-              {deletingType === 'info' 
+              {confirmDelete.type === 'info' 
                 ? 'Esta información junto con sus fotos serán eliminadas permanentemente.' 
                 : 'Esta acción no se puede deshacer y el producto desaparecerá del inventario.'}
             </p>
             <div className="flex gap-3">
               <button 
-                onClick={() => { playClick(); setDeletingId(null); setDeletingType(null); }} 
+                onClick={() => { playClick(); setConfirmDelete(null); }} 
                 className="flex-1 px-6 py-4 text-slate-600 hover:bg-slate-100 rounded-2xl font-black uppercase tracking-widest transition-colors"
               >
                 Cancelar

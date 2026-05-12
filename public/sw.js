@@ -1,23 +1,13 @@
-// Service Worker mínimo modificado para asegurar actualizaciones y prevenir problemas de caché
-self.addEventListener('install', (e) => {
+// Service Worker mínimo para habilitar la instalación PWA
+self.addEventListener('install', (event) => {
   self.skipWaiting();
 });
 
-self.addEventListener('activate', (e) => {
-  e.waitUntil(
-    caches.keys().then((cacheNames) => {
-      return Promise.all(
-        cacheNames.map((cacheName) => {
-          return caches.delete(cacheName);
-        })
-      );
-    }).then(() => {
-      self.registration.unregister();
-    })
-  );
+self.addEventListener('activate', (event) => {
+  event.waitUntil(clients.claim());
 });
 
 self.addEventListener('fetch', (event) => {
-  // Pass through all
-  return;
+  // Solo passthrough para permitir que la app funcione normalmente
+  event.respondWith(fetch(event.request));
 });

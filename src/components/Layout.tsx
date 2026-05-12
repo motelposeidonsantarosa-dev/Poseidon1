@@ -16,24 +16,12 @@ export default function Layout() {
   const [activeShiftId, setActiveShiftId] = useState<string | null>(null);
   const [activeShiftStartTime, setActiveShiftStartTime] = useState<string | null>(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [isOnline, setIsOnline] = useState(navigator.onLine);
   
   // Modal states
   const [isChangingPin, setIsChangingPin] = useState(false);
   const [showEndShiftModal, setShowEndShiftModal] = useState(false);
   const [newPin, setNewPin] = useState('');
   const [pinError, setPinError] = useState('');
-
-  useEffect(() => {
-    const handleOnline = () => setIsOnline(true);
-    const handleOffline = () => setIsOnline(false);
-    window.addEventListener('online', handleOnline);
-    window.addEventListener('offline', handleOffline);
-    return () => {
-      window.removeEventListener('online', handleOnline);
-      window.removeEventListener('offline', handleOffline);
-    };
-  }, []);
 
   useEffect(() => {
     setIsMobileMenuOpen(false);
@@ -264,33 +252,20 @@ export default function Layout() {
     <div className="min-h-screen bg-gray-50 flex flex-col lg:flex-row pb-20 lg:pb-0 [@media(max-height:600px)_and_(max-width:960px)_and_(orientation:landscape)]:pb-0 [@media(max-height:600px)_and_(max-width:960px)_and_(orientation:landscape)]:pl-20">
       {/* Mobile/Tablet Header (Logo Only) */}
       <div 
-        className="lg:hidden [@media(max-height:600px)_and_(max-width:960px)_and_(orientation:landscape)]:hidden bg-slate-900 text-white px-4 pb-4 flex justify-center items-center sticky top-0 z-40 shadow-md relative"
+        className="lg:hidden [@media(max-height:600px)_and_(max-width:960px)_and_(orientation:landscape)]:hidden bg-slate-900 text-white px-4 pb-4 flex justify-center items-center sticky top-0 z-40 shadow-md"
         style={{ paddingTop: 'max(1rem, env(safe-area-inset-top))' }}
       >
-        <div className="flex items-center gap-2 relative">
+        <div className="flex items-center gap-2">
           <span className="text-2xl">🔱</span>
           <span className="font-black tracking-tighter text-xl uppercase">Poseidón</span>
-        </div>
-        <div className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center gap-1.5 opacity-80" style={{ marginTop: 'calc(max(1rem, env(safe-area-inset-top)) / 2)' }}>
-          {!isOnline && <span className="text-[9px] uppercase font-bold text-red-400">Offline</span>}
-          <div className={cn("w-2 h-2 rounded-full", isOnline ? "bg-green-500" : "bg-red-500 animate-pulse")} />
         </div>
       </div>
 
       {/* Sidebar (Desktop & Tablet Landscape) */}
       <aside className="hidden lg:flex bg-slate-900 text-white w-20 lg:[@media(orientation:landscape)]:w-40 xl:w-48 flex-col sticky top-0 h-screen transition-all duration-300">
-        <div className="p-4 xl:p-4 flex flex-col items-center justify-center lg:[@media(orientation:landscape)]:items-start xl:items-start gap-1 border-b border-slate-800">
-          <div className="flex items-center gap-2">
-            <span className="text-2xl xl:text-2xl">🔱</span>
-            <span className="hidden lg:[@media(orientation:landscape)]:block xl:block font-black tracking-tighter text-base xl:text-base uppercase">Poseidón</span>
-          </div>
-          <div className={cn(
-            "text-[8px] sm:text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full flex items-center gap-1",
-            isOnline ? "bg-green-900/50 text-green-400" : "bg-red-900/50 text-red-400 animate-pulse"
-          )}>
-            <div className={cn("w-1.5 h-1.5 rounded-full", isOnline ? "bg-green-500" : "bg-red-500")} />
-            <span className="hidden lg:[@media(orientation:landscape)]:block xl:block">{isOnline ? 'Online' : 'Offline'}</span>
-          </div>
+        <div className="p-4 xl:p-4 flex items-center justify-center lg:[@media(orientation:landscape)]:justify-start xl:justify-start gap-2 border-b border-slate-800">
+          <span className="text-2xl xl:text-2xl">🔱</span>
+          <span className="hidden lg:[@media(orientation:landscape)]:block xl:block font-black tracking-tighter text-base xl:text-base uppercase">Poseidón</span>
         </div>
         
         <nav className="flex-1 p-2 xl:p-2 space-y-1 overflow-y-auto">

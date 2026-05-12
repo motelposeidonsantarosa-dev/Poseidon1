@@ -80,42 +80,11 @@ export default function Dashboard() {
   const directFileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    const unsubscribe = onSnapshot(collection(db, 'products'), async (snapshot) => {
+    const unsubscribe = onSnapshot(collection(db, 'products'), (snapshot) => {
       const prods = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as any));
       // Duplicate prevention
       const unique = Array.from(new Map(prods.map((item: any) => [item.name, item])).values());
       setInventory(unique);
-
-      if (snapshot.empty || snapshot.size < 5) {
-        const requiredServices = [
-          { name: "Servicio Base", price: 60000, stock: 999, category: "Servicios" },
-          { name: "Hora Adicional", price: 20000, stock: 999, category: "Servicios" },
-          { name: "Persona Adicional", price: 20000, stock: 999, category: "Servicios" },
-          { name: "Jacuzzi", price: 30000, stock: 999, category: "Servicios" },
-          { name: "Sauna", price: 20000, stock: 999, category: "Servicios" },
-          { name: "Turco", price: 20000, stock: 999, category: "Servicios" },
-          { name: "Valor Reserva", price: 40000, stock: 999, category: "Servicios" }
-        ];
-        const initialProducts = [
-          { name: "Cerveza Andina Lata", price: 6000, stock: 50, category: "Bebidas" },
-          { name: "Cerveza Águila Negra", price: 6000, stock: 50, category: "Bebidas" },
-          { name: "Cerveza Corona", price: 8000, stock: 50, category: "Bebidas" },
-          { name: "Cerveza Budweiser", price: 6000, stock: 50, category: "Bebidas" },
-          { name: "Cerveza Costeña", price: 6000, stock: 50, category: "Bebidas" },
-          { name: "Cerveza Póker", price: 6000, stock: 50, category: "Bebidas" },
-          { name: "Smirnoff", price: 14000, stock: 50, category: "Bebidas" },
-          { name: "Aguardiente 200 ml", price: 40000, stock: 50, category: "Bebidas" },
-          { name: "Champaña JP Chenet Lata", price: 17000, stock: 50, category: "Bebidas" },
-          { name: "Champaña JP Chenet 200 ml", price: 35000, stock: 50, category: "Bebidas" }
-        ];
-        const allToSeed = [...requiredServices, ...initialProducts];
-        const existingNames = prods.map((doc: any) => doc.name);
-        for (const prod of allToSeed) {
-          if (!existingNames.includes(prod.name)) {
-            addDoc(collection(db, 'products'), prod).catch(console.error);
-          }
-        }
-      }
     }, (error) => {
       handleFirestoreError(error, OperationType.GET, 'products');
     });
@@ -141,38 +110,24 @@ export default function Dashboard() {
   useEffect(() => {
     if (inventory.length === 0 || loading) return;
     
-    // Solo un procesador líder sincroniza los precios para evitar request bursts
-    const isProcessor = (appUser?.role === 'host' && activeShift?.hostId === appUser.id) || (appUser?.role === 'admin' && !globalActiveShift);
-    if (!isProcessor) return;
-    
     const currentBasePrice = getBasePrice();
     rooms.forEach(async (room) => {
       if (room.status === 'Libre' && (room.total !== currentBasePrice || room.basePrice !== currentBasePrice)) {
         try {
-          // Re-test to avoid optimistic UI races
-          const rSnap = await getDoc(doc(db, 'rooms', room.id));
-          if(rSnap.exists() && rSnap.data().status === 'Libre' && rSnap.data().total !== currentBasePrice) {
-            await updateDoc(doc(db, 'rooms', room.id), { 
-              total: currentBasePrice,
-              basePrice: currentBasePrice
-            });
-          }
+          await updateDoc(doc(db, 'rooms', room.id), { 
+            total: currentBasePrice,
+            basePrice: currentBasePrice
+          });
         } catch (e) {
           console.error("Error syncing room price:", e);
         }
       }
     });
-  }, [inventory, rooms, loading, appUser, activeShift, globalActiveShift]);
+  }, [inventory, rooms, loading]);
 
   useEffect(() => {
-    // Solo el Host activo procesa reservaciones automáticas para evitar carrera de peticiones de múltiples clientes.
-    // Si no hay host activo, lo procesa un admin.
-    const isProcessor = (appUser?.role === 'host' && activeShift?.hostId === appUser.id) || (appUser?.role === 'admin' && !globalActiveShift);
-    
-    if (!isProcessor) return;
-
     const checkReservations = async () => {
-      const nowMs = new Date().getTime(); // Obtener timestamp en el momento en vez del 'now' variable que cambia cada segundo
+      const nowMs = now.getTime();
       const staleReservations = reservations.filter(res => {
         if (res.status !== 'pending') return false;
         const resDate = parseISO(res.date);
@@ -182,10 +137,6 @@ export default function Dashboard() {
 
       for (const res of staleReservations) {
         try {
-          // Double check reservation status to avoid race condition if another client cancelled it a millisecond ago
-          const resSnap = await getDoc(doc(db, 'reservations', res.id));
-          if (!resSnap.exists() || resSnap.data().status !== 'pending') continue;
-
           // 1. Cancel Reservation
           await updateDoc(doc(db, 'reservations', res.id), { status: 'cancelled' });
 
@@ -230,13 +181,9 @@ export default function Dashboard() {
     };
 
     if (reservations.length > 0) {
-      // Usar setInterval local para chequear cada 30 segundos en vez de correr cada 1 segundo con la VDOM refresh.
-      const interval = setInterval(checkReservations, 30000);
-      // Ejecutar una vez al montar The Effect
       checkReservations();
-      return () => clearInterval(interval);
     }
-  }, [reservations, appUser, activeShift, globalActiveShift]);
+  }, [now, reservations]);
 
   useEffect(() => {
     audioRef.current = new Audio('https://actions.google.com/sounds/v1/alarms/beep_short.ogg');
@@ -290,30 +237,70 @@ export default function Dashboard() {
   }, [appUser]);
 
   useEffect(() => {
-    const unsubscribe = onSnapshot(collection(db, 'rooms'), async (snapshot) => {
-      if (snapshot.empty) {
-        for (let i = 1; i <= 5; i++) {
-          setDoc(doc(db, 'rooms', i.toString()), {
-            name: `Habitación ${i}`,
-            status: 'Libre',
-            startTime: null,
-            endTime: null,
-            persons: 2,
-            total: 60000,
-            basePrice: 60000,
-            services: [],
-            products: []
-          }).catch(console.error);
+    const seedProducts = async () => {
+      try {
+        const productsSnap = await getDocs(collection(db, 'products'));
+        
+        if (productsSnap.empty || productsSnap.size < 5) {
+          const requiredServices = [
+            { name: "Servicio Base", price: 60000, stock: 999, category: "Servicios" },
+            { name: "Hora Adicional", price: 20000, stock: 999, category: "Servicios" },
+            { name: "Persona Adicional", price: 20000, stock: 999, category: "Servicios" },
+            { name: "Jacuzzi", price: 30000, stock: 999, category: "Servicios" },
+            { name: "Sauna", price: 20000, stock: 999, category: "Servicios" },
+            { name: "Turco", price: 20000, stock: 999, category: "Servicios" },
+            { name: "Valor Reserva", price: 40000, stock: 999, category: "Servicios" }
+          ];
+
+          const initialProducts = [
+            { name: "Cerveza Andina Lata", price: 6000, stock: 50, category: "Bebidas" },
+            { name: "Cerveza Águila Negra", price: 6000, stock: 50, category: "Bebidas" },
+            { name: "Cerveza Corona", price: 8000, stock: 50, category: "Bebidas" },
+            { name: "Cerveza Budweiser", price: 6000, stock: 50, category: "Bebidas" },
+            { name: "Cerveza Costeña", price: 6000, stock: 50, category: "Bebidas" },
+            { name: "Cerveza Póker", price: 6000, stock: 50, category: "Bebidas" },
+            { name: "Smirnoff", price: 14000, stock: 50, category: "Bebidas" },
+            { name: "Aguardiente 200 ml", price: 40000, stock: 50, category: "Bebidas" },
+            { name: "Champaña JP Chenet Lata", price: 17000, stock: 50, category: "Bebidas" },
+            { name: "Champaña JP Chenet 200 ml", price: 35000, stock: 50, category: "Bebidas" },
+            { name: "Champaña JP Chenet Grande", price: 110000, stock: 50, category: "Bebidas" },
+            { name: "Botella de Agua", price: 2000, stock: 50, category: "Bebidas" },
+            { name: "Gatorade", price: 6000, stock: 50, category: "Bebidas" },
+            { name: "Soda", price: 4000, stock: 50, category: "Bebidas" },
+            { name: "Electrolit", price: 12000, stock: 50, category: "Bebidas" },
+            { name: "Coca Cola", price: 4000, stock: 50, category: "Bebidas" },
+            { name: "Cola y Pola", price: 4000, stock: 50, category: "Bebidas" },
+            { name: "Jugo Hit", price: 3000, stock: 50, category: "Bebidas" },
+            { name: "Soda Hatsu", price: 6000, stock: 50, category: "Bebidas" },
+            { name: "Retardantes", price: 15000, stock: 50, category: "Sexshop" },
+            { name: "Lubricantes", price: 7000, stock: 50, category: "Sexshop" },
+            { name: "Condones", price: 5000, stock: 50, category: "Sexshop" }
+          ];
+
+          const allToSeed = [...requiredServices, ...initialProducts];
+          const existingNames = productsSnap.docs.map(doc => doc.data().name);
+          
+          for (const prod of allToSeed) {
+            if (!existingNames.includes(prod.name)) {
+              await addDoc(collection(db, 'products'), prod);
+            }
+          }
+        }
+      } catch (e: any) {
+        if (e.message?.toLowerCase().includes('offline') || !navigator.onLine) {
+          console.warn("Modo Offline: no se pudo verificar/sembrar productos iniciales.");
+        } else {
+          console.error("Error seeding products:", e);
         }
       }
+    };
+    seedProducts();
+  }, []);
+
+  useEffect(() => {
+    const unsubscribe = onSnapshot(collection(db, 'rooms'), async (snapshot) => {
       const roomsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Room));
-      // Try to parse IDs as int to sort them numerically (1, 2, 3...) rather than alphabetically (1, 10, 2...)
-      roomsData.sort((a, b) => {
-        const idA = parseInt(a.id);
-        const idB = parseInt(b.id);
-        if(!isNaN(idA) && !isNaN(idB)) return idA - idB;
-        return a.name.localeCompare(b.name);
-      });
+      roomsData.sort((a, b) => parseInt(a.id) - parseInt(b.id));
       setRooms(roomsData);
       setLoading(false);
     });
@@ -343,8 +330,19 @@ export default function Dashboard() {
 
     // Verificar de nuevo si hay un turno activo global antes de iniciar (por seguridad)
     const q = query(collection(db, 'shifts'), where('status', '==', 'active'));
-    const snap = await getDocs(q);
-    if (!snap.empty) {
+    let snap;
+    try {
+      snap = await getDocs(q);
+    } catch (e: any) {
+      if (e.message?.toLowerCase().includes('offline')) {
+        console.warn("Modo Offline: Verificación de turno activo omitida.");
+        // We assume it's fine and let the write fail if there's a rule conflict
+      } else {
+        throw e;
+      }
+    }
+    
+    if (snap && !snap.empty) {
       alert(`No se puede iniciar turno. El host ${snap.docs[0].data().hostName} ya tiene un turno activo.`);
       return;
     }
@@ -386,7 +384,18 @@ export default function Dashboard() {
     try {
       // Calculate totals for shift
       const ticketsQ = query(collection(db, 'tickets'), where('hostName', '==', appUser.name));
-      const ticketsSnap = await getDocs(ticketsQ);
+      let ticketsSnap;
+      try {
+        ticketsSnap = await getDocs(ticketsQ);
+      } catch (e: any) {
+         if (e.message?.toLowerCase().includes('offline')) {
+           alert("Error: No se pueden calcular los totales del turno sin internet. Por favor, conéctate para cerrar el turno correctamente.");
+           setIsEndingShift(false);
+           return;
+         }
+         throw e;
+      }
+      
       let totalIncome = 0;
       let incomeEfectivo = 0;
       let incomeTransferencia = 0;
@@ -934,7 +943,10 @@ export default function Dashboard() {
               onClick={(e) => {
                 e.preventDefault();
                 playClick();
-                navigate(`/dashboard/room/${room.id}`);
+                setIsNavigating(true);
+                setTimeout(() => {
+                  navigate(`/dashboard/room/${room.id}`);
+                }, 300);
               }}
               className={cn(
                 "rounded-xl sm:rounded-2xl p-2 sm:p-3.5 lg:p-2 shadow-lg border-2 transition-all active:scale-95 flex flex-col h-full text-white min-h-[110px] sm:min-h-[160px] lg:min-h-[110px] xl:min-h-0 xl:aspect-square relative overflow-hidden",
