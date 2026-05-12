@@ -41,57 +41,65 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const initAuth = async () => {
       try {
-        // Try to ensure anonymous auth for Firestore security rules
-        try {
-          const { signInAnonymously } = await import('firebase/auth');
+        // Ejecutar signInAnonymously sin bloquear el resto de la carga
+        import('firebase/auth').then(async ({ signInAnonymously }) => {
           if (!auth.currentUser) {
-            await signInAnonymously(auth);
+            try {
+              await signInAnonymously(auth);
+            } catch (authErr: any) {
+              console.warn("Could not sign in anonymously:", authErr.message);
+            }
           }
-        } catch (authErr: any) {
-          console.warn("Could not sign in anonymously. Security rules might fail if they require request.auth. Error:", authErr.message);
-          // Don't block app init, just log warning. 
-          // Admin-restricted-operation is common if not enabled in console.
-        }
+        }).catch(err => console.warn(err));
 
         const savedUserId = localStorage.getItem('poseidon_user_id');
         const savedSessionId = localStorage.getItem('poseidon_session_id');
 
+        // Para hacer esto ultra veloz, validamos con los defaults ANTES de ir a la red
         if (savedUserId && savedSessionId) {
-          const userRef = doc(db, 'app_users', savedUserId);
-          let userDoc;
-          try {
-            userDoc = await getDoc(userRef);
-          } catch (e: any) {
-            if (e.message?.includes('offline')) {
-               console.warn('Offline mode: user skip validation');
-               const fbUser = DEFAULT_USERS.find(u => u.id === savedUserId);
-               if (fbUser) {
-                 setAppUser({...fbUser, activeSessions: [savedSessionId]});
-               }
-               userDoc = null;
-            } else {
-               throw e;
-            }
+          const userLocalFallback = DEFAULT_USERS.find(u => u.id === savedUserId);
+          if (userLocalFallback) {
+             // Oportunamente mostramos q el usuario está logueado mientras carga real de la base de datos
+             setAppUser({...userLocalFallback, activeSessions: [savedSessionId]});
           }
-          
-          if (userDoc && userDoc.exists()) {
-            const userData = userDoc.data() as AppUser;
+        }
+        
+        // Cargar usuario real y app_users en paralelo (esto reduce MUCHO el tiempo de carga)
+        const [userDoc, usersSnap] = await Promise.allSettled([
+          (savedUserId && savedSessionId) ? getDoc(doc(db, 'app_users', savedUserId)) : Promise.resolve(null),
+          getDocs(collection(db, 'app_users'))
+        ]);
+
+        let finalUsers = [...DEFAULT_USERS];
+
+        if (usersSnap.status === 'fulfilled' && !usersSnap.value.empty) {
+          finalUsers = usersSnap.value.docs.map(d => ({ id: d.id, ...d.data() } as AppUser));
+          setUsers(finalUsers);
+        } else {
+           // Seed initial default users automatically so user has them right away
+           if (usersSnap.status === 'fulfilled' && usersSnap.value.empty) {
+              for (const u of DEFAULT_USERS) {
+                 setDoc(doc(db, 'app_users', u.id), u).catch(() => {});
+              }
+           }
+           setUsers(finalUsers);
+        }
+
+        if (savedUserId && savedSessionId && userDoc.status === 'fulfilled' && userDoc.value && userDoc.value.exists()) {
+            const userData = userDoc.value.data() as AppUser;
             const sessions = userData.activeSessions || [];
             
-            // Check if session is still valid (is in the list)
             if (sessions.includes(savedSessionId)) {
               setAppUser(userData);
               
-              // Listen for session changes (Session Restriction)
+              const userRef = doc(db, 'app_users', savedUserId);
               unsubscribeUser = onSnapshot(userRef, (doc) => {
                 if (doc.exists()) {
                   const data = doc.data() as AppUser;
                   const currentSavedSessionId = localStorage.getItem('poseidon_session_id');
                   const currentSessions = data.activeSessions || [];
                   
-                  // Only trigger if we have a session ID locally and it's NO LONGER in the list
                   if (currentSavedSessionId && !currentSessions.includes(currentSavedSessionId)) {
-                    // Session invalidated (e.g. by another login exceeding limit or admin logout)
                     setAppUser(null);
                     localStorage.removeItem('poseidon_user_id');
                     localStorage.removeItem('poseidon_session_id');
@@ -100,34 +108,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 }
               });
             } else {
+              setAppUser(null);
               localStorage.removeItem('poseidon_user_id');
               localStorage.removeItem('poseidon_session_id');
             }
-          } else {
-            localStorage.removeItem('poseidon_user_id');
-            localStorage.removeItem('poseidon_session_id');
-          }
-        }
-
-        let usersSnap;
-        try {
-          usersSnap = await getDocs(collection(db, 'app_users'));
-          if (usersSnap.empty) {
-            // Bootstrap users only if collection is totally empty
-            for (const u of DEFAULT_USERS) {
-              setDoc(doc(db, 'app_users', u.id), u).catch(() => {});
+        } else if (savedUserId && savedSessionId && (userDoc.status === 'rejected' || (userDoc.status === 'fulfilled' && !userDoc.value))) {
+            const fbUser = finalUsers.find(u => u.id === savedUserId);
+            if (fbUser) {
+              setAppUser({...fbUser, activeSessions: [savedSessionId]});
+            } else {
+               localStorage.removeItem('poseidon_user_id');
+               localStorage.removeItem('poseidon_session_id');
+               setAppUser(null);
             }
-            setUsers(DEFAULT_USERS);
-          } else {
-            setUsers(usersSnap.docs.map(d => ({ id: d.id, ...d.data() } as AppUser)));
-          }
-        } catch (e: any) {
-          if (e.message?.includes('offline')) {
-            console.warn('Offline mode: using default users');
-            setUsers(DEFAULT_USERS);
-          } else {
-            throw e;
-          }
         }
       } catch (error) {
         console.error("Error initializing auth:", error);
