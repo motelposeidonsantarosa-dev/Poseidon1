@@ -16,8 +16,6 @@ import Reservations from './pages/Reservations';
 import Incidents from './pages/Incidents';
 import { PrintPreview } from './components/PrintPreview';
 
-import { doc, getDocFromServer } from 'firebase/firestore';
-import { db } from './firebase';
 import { KeyRound, X } from 'lucide-react';
 
 function ConnectionErrorBanner() {
