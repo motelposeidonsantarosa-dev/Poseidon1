@@ -550,8 +550,6 @@ export default function RoomDetail() {
       setShowNoShiftModal(true);
       return;
     }
-    
-    // Fire-and-forget update
     updateDoc(doc(db, 'rooms', room.id), {
       status: 'Libre',
       startTime: null,
@@ -563,10 +561,10 @@ export default function RoomDetail() {
       basePrice: getServicePrice('Servicio Base', 60000),
       currentHostId: null,
       currentHostName: null
-    }).catch(e => console.error("Error setting free:", e));
-    
+    }).catch(err => {
+      console.error(err);
+    });
     playSuccess();
-    setIsNavigating(true);
     navigate('/dashboard');
   };
 
@@ -685,8 +683,7 @@ export default function RoomDetail() {
           <button 
             onClick={() => { 
                 playClick(); 
-                setIsNavigating(true);
-                setTimeout(() => navigate('/dashboard'), 300);
+                navigate('/dashboard');
             }} 
             className="p-2 sm:p-3 lg:p-2 bg-white hover:bg-slate-100 rounded-xl shadow-sm transition-colors border border-slate-200"
           >

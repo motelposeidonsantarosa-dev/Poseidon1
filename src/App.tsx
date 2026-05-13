@@ -16,18 +16,15 @@ import Reservations from './pages/Reservations';
 import Incidents from './pages/Incidents';
 import { PrintPreview } from './components/PrintPreview';
 
-import { doc } from 'firebase/firestore';
+import { doc, getDocFromServer } from 'firebase/firestore';
 import { db } from './firebase';
 import { KeyRound, X } from 'lucide-react';
 
-import { RefreshCcw } from 'lucide-react';
-import { clearIndexedDbPersistence } from 'firebase/firestore';
-
 function ConnectionErrorBanner() {
   const [error, setError] = React.useState<string | null>(null);
-  const [syncing, setSyncing] = React.useState(false);
 
   React.useEffect(() => {
+    // Escuchar el estado de conexión del sistema operativo directamente
     const handleOnline = () => {
       setError(null);
       console.log("Sistema: Conexión recuperada.");
@@ -39,6 +36,7 @@ function ConnectionErrorBanner() {
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
 
+    // Si al cargar ya está offline, mostrar el mensaje
     if (!navigator.onLine) {
       handleOffline();
     }
@@ -49,47 +47,20 @@ function ConnectionErrorBanner() {
     };
   }, []);
 
-  const handleForceSync = async () => {
-    if (confirm('Al forzar sincronización, el sistema reiniciará la base de datos local prevenida para corregir desfases de red. ¿Desea continuar?')) {
-      setSyncing(true);
-      try {
-        await clearIndexedDbPersistence(db);
-        window.location.reload();
-      } catch (err) {
-        console.error(err);
-        alert('Error al forzar sincronización: Primero asegure que no tenga otras ventanas del sistema abiertas.');
-        setSyncing(false);
-      }
-    }
-  };
+  if (!error) return null;
 
   return (
-    <div className="fixed bottom-20 left-4 right-4 md:left-auto md:right-8 md:w-96 flex flex-col gap-2 z-[1000]">
-      {error && (
-        <div className="bg-blue-600 text-white p-5 rounded-3xl shadow-2xl animate-in slide-in-from-bottom-10 border-2 border-white/20 backdrop-blur-md">
-          <div className="flex items-start gap-4">
-            <div className="text-3xl animate-pulse">📡</div>
-            <div className="flex-1">
-              <p className="font-black text-xs uppercase mb-1 tracking-widest text-blue-100">Modo Fuera de Línea</p>
-              <p className="text-[11px] font-bold leading-relaxed">{error}</p>
-            </div>
-            <button onClick={() => setError(null)} className="p-2 hover:bg-white/20 rounded-full transition-colors">
-              <X size={20} />
-            </button>
-          </div>
+    <div className="fixed bottom-20 left-4 right-4 md:left-auto md:right-8 md:w-96 bg-blue-600 text-white p-5 rounded-3xl shadow-2xl z-[1000] animate-in slide-in-from-bottom-10 border-2 border-white/20 backdrop-blur-md">
+      <div className="flex items-start gap-4">
+        <div className="text-3xl animate-pulse">📡</div>
+        <div className="flex-1">
+          <p className="font-black text-xs uppercase mb-1 tracking-widest text-blue-100">Modo Fuera de Línea</p>
+          <p className="text-[11px] font-bold leading-relaxed">{error}</p>
         </div>
-      )}
-      
-      {!error && (
-        <button 
-          onClick={handleForceSync}
-          disabled={syncing}
-          className="flex items-center justify-center gap-2 bg-slate-900 text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg hover:bg-black transition-colors"
-        >
-          <RefreshCcw size={14} className={syncing ? 'animate-spin' : ''} />
-          {syncing ? 'Sincronizando...' : 'Forzar Sincronización Local'}
+        <button onClick={() => setError(null)} className="p-2 hover:bg-white/20 rounded-full transition-colors">
+          <X size={20} />
         </button>
-      )}
+      </div>
     </div>
   );
 }
