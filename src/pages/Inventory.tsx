@@ -171,24 +171,43 @@ export default function Inventory() {
   const handleSaveRoom = (e?: any) => {
     if (e && e.preventDefault) e.preventDefault();
     playClick();
-    if (!editingId) return;
     
-    // Grab id and data, then reset state immediately
-    const targetId = editingId;
     const { id, ...dataToSave } = editForm as any;
-    setEditingId(null);
-    setEditForm({});
+    
+    if (editingId) {
+      const targetId = editingId;
+      setEditingId(null);
+      setEditForm({});
 
-    updateDoc(doc(db, 'rooms', targetId), {
-      ...dataToSave,
-      image: deleteField(),
-      updatedAt: new Date().toISOString()
-    }).then(() => {
-      playSuccess();
-    }).catch(err => {
-      playError();
-      handleFirestoreError(err, OperationType.UPDATE, `rooms/${targetId}`);
-    });
+      updateDoc(doc(db, 'rooms', targetId), {
+        ...dataToSave,
+        image: deleteField(),
+        updatedAt: new Date().toISOString()
+      }).then(() => {
+        playSuccess();
+      }).catch(err => {
+        playError();
+        handleFirestoreError(err, OperationType.UPDATE, `rooms/${targetId}`);
+      });
+    } else {
+      setIsAdding(false);
+      setEditForm({});
+      
+      addDoc(collection(db, 'rooms'), {
+        ...dataToSave,
+        status: 'Libre',
+        total: 60000,
+        basePrice: 60000,
+        products: [],
+        services: [],
+        createdAt: new Date().toISOString()
+      }).then(() => {
+        playSuccess();
+      }).catch(err => {
+        playError();
+        handleFirestoreError(err, OperationType.CREATE, 'rooms');
+      });
+    }
   };
 
   const handleSaveInfo = (e?: any) => {
@@ -712,121 +731,126 @@ export default function Inventory() {
         </>
       ) : (
         <div className="space-y-6">
-          <div className="flex items-center gap-3">
-            <div className="p-3 bg-amber-600 text-white rounded-2xl shadow-lg shadow-amber-100">
-              <BedDouble size={24} />
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+            <div className="flex items-center gap-3">
+              <div className="p-3 bg-amber-600 text-white rounded-2xl shadow-lg shadow-amber-100">
+                <BedDouble size={24} />
+              </div>
+              <div>
+                <h2 className="text-xl font-black text-slate-900 uppercase tracking-tight">Catálogo de Habitaciones</h2>
+                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest leading-none mt-1">Configura fotos y descripciones para clientes</p>
+              </div>
             </div>
-            <div>
-              <h2 className="text-xl font-black text-slate-900 uppercase tracking-tight">Catálogo de Habitaciones</h2>
-              <p className="text-xs font-bold text-slate-400 uppercase tracking-widest leading-none mt-1">Configura fotos y descripciones para clientes</p>
-            </div>
+            <button 
+              onClick={() => { playClick(); setIsAdding(true); setEditingId(null); setEditForm({ name: '', description: '', images: [] }); }} 
+              className="w-full sm:w-auto bg-amber-600 hover:bg-amber-700 text-white px-6 py-3 rounded-2xl font-black flex items-center justify-center gap-2 transition-all active:scale-95 shadow-lg shadow-amber-100"
+            >
+              <Plus size={20} /> Nueva Habitación
+            </button>
           </div>
+
+          {(isAdding || editingId) && activeTab === 'rooms' && (
+            <div className="bg-white p-6 rounded-3xl border-2 border-amber-100 shadow-xl animate-in fade-in slide-in-from-top-4 mb-8">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-4">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Galería de Fotos</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {(editForm.images || []).map((img: string, idx: number) => (
+                      <div key={idx} className="aspect-video relative rounded-xl overflow-hidden bg-slate-100 group">
+                        <img src={img} className="w-full h-full object-cover" />
+                        <button 
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            removeImage(idx);
+                          }}
+                          className="absolute top-2 right-2 w-8 h-8 bg-red-600 text-white rounded-lg flex items-center justify-center shadow-xl active:scale-95 z-20"
+                        >
+                          <X size={20} />
+                        </button>
+                      </div>
+                    ))}
+                    <button 
+                      onClick={() => { playClick(); fileInputRef.current?.click(); }}
+                      className="aspect-video rounded-xl border-2 border-dashed border-slate-200 flex flex-col items-center justify-center text-slate-400 hover:border-amber-400 hover:text-amber-500 transition-colors"
+                    >
+                      <Camera size={24} />
+                      <span className="text-[8px] font-black uppercase mt-1">Agregar Foto</span>
+                    </button>
+                  </div>
+                </div>
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Nombre Habitación</label>
+                    <input 
+                      type="text" 
+                      className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl font-bold"
+                      placeholder="Ej. Habitación 301, Suite Presidencial..."
+                      value={editForm.name || ''}
+                      onChange={e => setEditForm({...editForm, name: e.target.value})}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Descripción</label>
+                    <textarea 
+                      className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl font-bold min-h-[100px]"
+                      placeholder="Descripción opcional..."
+                      value={editForm.description || ''}
+                      onChange={e => setEditForm({...editForm, description: e.target.value})}
+                    />
+                  </div>
+                  <div className="flex gap-3">
+                    <button onClick={handleSaveRoom} className="flex-1 bg-amber-600 hover:bg-amber-700 text-white p-4 rounded-2xl font-black uppercase tracking-widest shadow-lg shadow-amber-100">
+                      Guardar Habitación
+                    </button>
+                    <button onClick={() => { playClick(); setIsAdding(false); setEditingId(null); }} className="px-6 bg-slate-100 hover:bg-slate-200 text-slate-500 rounded-2xl font-black uppercase">
+                      Cancelar
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {rooms.map((room) => {
-              const isEditing = editingId === room.id;
               return (
                 <div key={room.id} className="bg-white rounded-3xl border border-slate-200 overflow-hidden shadow-xl">
-                  {isEditing ? (
-                    <div className="p-6 space-y-4">
-                      <div className="space-y-4">
-                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Galería de Fotos</label>
-                        <div className="grid grid-cols-2 gap-2">
-                          {(editForm.images || []).map((img: string, idx: number) => (
-                            <div key={idx} className="aspect-video relative rounded-2xl overflow-hidden bg-slate-50 group">
-                              <img src={img} className="w-full h-full object-cover" />
-                              <button 
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  removeImage(idx);
-                                }}
-                                className="absolute top-2 right-2 w-8 h-8 bg-red-600 text-white rounded-full flex items-center justify-center shadow-xl active:scale-95 z-20"
-                               
-                              >
-                                <X size={20} />
-                              </button>
-                            </div>
-                          ))}
-                          <button 
-                            onClick={() => { playClick(); fileInputRef.current?.click(); }}
-                            className="aspect-video rounded-2xl border-2 border-dashed border-slate-200 flex flex-col items-center justify-center text-slate-400 hover:border-amber-400 hover:text-amber-500 transition-colors"
-                          >
-                            <Camera size={24} />
-                            <span className="text-[8px] font-black uppercase mt-1">Agregar Foto</span>
-                          </button>
-                        </div>
+                  <div className="aspect-video bg-slate-100 relative overflow-hidden group">
+                    {room.images && room.images.length > 0 ? (
+                      <img src={room.images[0]} className="w-full h-full object-cover transition-transform group-hover:scale-105" />
+                    ) : (room as any).image ? (
+                      <img src={(room as any).image} className="w-full h-full object-cover transition-transform group-hover:scale-105" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-slate-300">
+                        <BedDouble size={48} />
                       </div>
-                      
-                      <div className="space-y-2">
-                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Nombre Habitación</label>
-                        <input 
-                          type="text" 
-                          className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-sm"
-                          value={editForm.name || ''}
-                          onChange={e => setEditForm({...editForm, name: e.target.value})}
-                        />
+                    )}
+                    <button 
+                      onClick={() => handleEditRoom(room)}
+                      className="absolute top-4 right-4 w-10 h-10 bg-white/90 backdrop-blur-md rounded-xl shadow-lg flex items-center justify-center text-blue-600 hover:bg-blue-600 hover:text-white transition-all transform hover:scale-110"
+                    >
+                      <Edit2 size={18} />
+                    </button>
+                    {room.images && room.images.length > 1 && (
+                      <div className="absolute bottom-4 left-4 bg-black/50 backdrop-blur-md text-white text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-widest">
+                        {room.images.length} Fotos
                       </div>
-
-                      <div className="space-y-2">
-                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Descripción Publica</label>
-                        <textarea 
-                          rows={3}
-                          className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-sm"
-                          placeholder="Describe la habitación para el catálogo..."
-                          value={editForm.description || ''}
-                          onChange={e => setEditForm({...editForm, description: e.target.value})}
-                        />
-                      </div>
-
-                      <div className="flex gap-3 pt-2">
-                        <button onClick={handleSaveRoom} className="flex-1 bg-amber-600 text-white py-4 rounded-2xl font-black uppercase tracking-widest shadow-lg shadow-amber-100 flex items-center justify-center gap-2">
-                          <Save size={18} /> Guardar
-                        </button>
-                        <button onClick={() => { playClick(); setEditingId(null); }} className="px-6 bg-slate-100 text-slate-600 rounded-2xl font-black uppercase tracking-widest hover:bg-slate-200">
-                          <X size={18} />
-                        </button>
-                      </div>
+                    )}
+                  </div>
+                  <div className="p-6">
+                    <div className="flex justify-between items-start mb-3">
+                      <h3 className="text-xl font-black text-slate-900 uppercase tracking-tighter">{room.name}</h3>
+                      <span className="bg-amber-100 text-amber-700 px-3 py-1 rounded-full text-[10px] font-black uppercase">Activa</span>
                     </div>
-                  ) : (
-                    <>
-                      <div className="aspect-video bg-slate-100 relative overflow-hidden group">
-                        {room.images && room.images.length > 0 ? (
-                          <img src={room.images[0]} className="w-full h-full object-cover transition-transform group-hover:scale-105" />
-                        ) : (room as any).image ? (
-                          <img src={(room as any).image} className="w-full h-full object-cover transition-transform group-hover:scale-105" />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center text-slate-300">
-                            <BedDouble size={48} />
-                          </div>
-                        )}
-                        <button 
-                          onClick={() => handleEditRoom(room)}
-                          className="absolute top-4 right-4 w-10 h-10 bg-white/90 backdrop-blur-md rounded-xl shadow-lg flex items-center justify-center text-blue-600 hover:bg-blue-600 hover:text-white transition-all transform hover:scale-110"
-                        >
-                          <Edit2 size={18} />
-                        </button>
-                        {room.images && room.images.length > 1 && (
-                          <div className="absolute bottom-4 left-4 bg-black/50 backdrop-blur-md text-white text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-widest">
-                            {room.images.length} Fotos
-                          </div>
-                        )}
-                      </div>
-                      <div className="p-6">
-                        <div className="flex justify-between items-start mb-3">
-                          <h3 className="text-xl font-black text-slate-900 uppercase tracking-tighter">{room.name}</h3>
-                          <span className="bg-amber-100 text-amber-700 px-3 py-1 rounded-full text-[10px] font-black uppercase">Activa</span>
-                        </div>
-                        <p className="text-slate-500 text-xs italic line-clamp-2 min-h-[2rem]">
-                          {room.description || 'Sin descripción configurada.'}
-                        </p>
-                        <div className="mt-4 pt-4 border-t border-slate-50 flex items-center gap-2 text-slate-400">
-                           <Info size={14} />
-                           <span className="text-[10px] font-bold uppercase tracking-widest">Información para Clientes</span>
-                        </div>
-                      </div>
-                    </>
-                  )}
+                    <p className="text-slate-500 text-xs italic line-clamp-2 min-h-[2rem]">
+                      {room.description || 'Sin descripción configurada.'}
+                    </p>
+                    <div className="mt-4 pt-4 border-t border-slate-50 flex items-center gap-2 text-slate-400">
+                        <Info size={14} />
+                        <span className="text-[10px] font-bold uppercase tracking-widest">Información para Clientes</span>
+                    </div>
+                  </div>
                 </div>
               );
             })}

@@ -965,6 +965,31 @@ export default function Dashboard() {
                     </h2>
                     {appUser?.role === 'admin' && (
                       <div className="flex items-center gap-1">
+                        {isCleaning && (
+                          <button 
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              playClick();
+                              updateDoc(doc(db, 'rooms', room.id), {
+                                status: 'Libre',
+                                startTime: null,
+                                endTime: null,
+                                persons: 2,
+                                services: [],
+                                products: [],
+                                currentHostId: null,
+                                currentHostName: null
+                              }).catch(console.error);
+                              playSuccess();
+                            }}
+                            className="p-1 sm:p-2 bg-white/20 hover:bg-white/40 rounded-full transition-colors flex items-center justify-center"
+                            title="Marcar como Libre rápido"
+                          >
+                            <CheckCircle size={10} className="sm:hidden lg:block lg:w-3 lg:h-3" />
+                            <CheckCircle size={18} className="hidden sm:block lg:hidden" />
+                          </button>
+                        )}
                         <button 
                           onClick={(e) => {
                             e.preventDefault();
@@ -974,7 +999,6 @@ export default function Dashboard() {
                             setEditRoomName(room.name);
                           }}
                           className="p-1 sm:p-2 bg-white/20 hover:bg-white/40 rounded-full transition-colors"
-                         
                         >
                           <Edit2 size={10} className="sm:hidden lg:block lg:w-3 lg:h-3" />
                           <Edit2 size={18} className="hidden sm:block lg:hidden" />
@@ -986,10 +1010,34 @@ export default function Dashboard() {
                             handleDeleteRoom(room.id);
                           }}
                           className="p-1 sm:p-2 bg-white/20 hover:bg-red-500 hover:text-white rounded-full transition-colors"
-                         
                         >
                           <Trash2 size={10} className="sm:hidden lg:block lg:w-3 lg:h-3" />
                           <Trash2 size={18} className="hidden sm:block lg:hidden" />
+                        </button>
+                      </div>
+                    )}
+                    {appUser?.role === 'host' && isCleaning && (
+                      <div className="flex items-center gap-1">
+                        <button 
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            playClick();
+                            updateDoc(doc(db, 'rooms', room.id), {
+                              status: 'Libre',
+                              startTime: null,
+                              endTime: null,
+                              persons: 2,
+                              services: [],
+                              products: [],
+                              currentHostId: null,
+                              currentHostName: null
+                            }).catch(console.error);
+                            playSuccess();
+                          }}
+                          className="p-1 sm:p-2 bg-white/20 hover:bg-white/40 rounded-full transition-colors font-bold text-[10px]"
+                        >
+                          <CheckCircle size={14} className="inline mr-1" /> Libre
                         </button>
                       </div>
                     )}
